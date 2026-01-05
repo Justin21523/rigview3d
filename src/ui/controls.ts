@@ -86,6 +86,7 @@ export function initControls({
       viewer.frameObject(currentModelRoot); // Auto-frame the model so it fits in the viewport.
 
       editor.setModelRoot(currentModelRoot); // Tell the editor about the new active model so hierarchy/selection stay in sync.
+      editor.setSourceFileName(result.fileName); // Store original filename so Export can propose a friendly output name.
       helpers.setModelRoot(currentModelRoot); // Tell helpers about the new model (skeleton/wireframe operate on the active root).
 
       animator.setSource(result.root, result.animations); // Bind animation mixer to the new model and its clips.

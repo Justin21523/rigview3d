@@ -11,6 +11,12 @@
 
 import * as THREE from "three"; // Import math helpers (deg/rad) and material runtime type guards.
 import type { Editor } from "../core/editor/editor"; // Import Editor type (selection events).
+import {
+  applyTransform, // Apply a transform snapshot to an Object3D (used by undo/redo commands).
+  captureTransform, // Capture Object3D transform for history snapshots.
+  isTransformDifferent, // Compare two transforms to avoid pushing no-op history commands.
+  type TransformSnapshot, // Type for position/quaternion/scale snapshots.
+} from "../core/editor/transformSnapshot"; // Import transform snapshot helpers shared with the core Editor.
 
 export function initInspectorUi(editor: Editor): void {
   // Public API: attach Inspector panel behavior to the DOM.
@@ -48,6 +54,22 @@ export function initInspectorUi(editor: Editor): void {
   let materialIndex = 0; // Currently selected material slot index for the mesh material editor.
 
   let isSyncing = false; // Guard flag to prevent event handler feedback loops while writing values to inputs.
+
+  let nameEditStart: string | null = null; // Original name captured when the name input receives focus (used for undo).
+  let nameEditObject: THREE.Object3D | null = null; // Object that is being renamed (captured on focus).
+
+  let transformEditStart: TransformSnapshot | null = null; // Original transform captured on focus (used for undo).
+  let transformEditObject: THREE.Object3D | null = null; // Object whose transform is being edited via inspector inputs.
+
+  type MaterialSnapshot = {
+    // Snapshot of editable PBR parameters we expose in the inspector.
+    color: string; // CSS hex color string like "#rrggbb".
+    metalness: number; // PBR metalness value in [0,1].
+    roughness: number; // PBR roughness value in [0,1].
+  }; // End MaterialSnapshot type.
+
+  let materialEditStart: MaterialSnapshot | null = null; // Material snapshot captured at the start of an edit interaction.
+  let materialEditMaterial: THREE.MeshStandardMaterial | null = null; // Which material instance we are currently editing.
 
   const setInspectorVisible = (hasSelection: boolean) => {
     // Toggle the empty/content inspector views.
@@ -155,6 +177,55 @@ export function initInspectorUi(editor: Editor): void {
     return material as THREE.MeshStandardMaterial; // Return as MeshStandardMaterial for editing.
   };
 
+  const captureMaterial = (mat: THREE.MeshStandardMaterial): MaterialSnapshot => {
+    // Capture the subset of material properties we expose in this inspector.
+    return {
+      color: `#${mat.color.getHexString()}`, // Store color as a CSS hex string (matches `<input type="color">`).
+      metalness: mat.metalness, // Store current metalness.
+      roughness: mat.roughness, // Store current roughness.
+    }; // End snapshot object.
+  };
+
+  const applyMaterial = (mat: THREE.MeshStandardMaterial, snapshot: MaterialSnapshot): void => {
+    // Apply a previously captured material snapshot.
+    mat.color.set(snapshot.color); // Restore base color.
+    mat.metalness = snapshot.metalness; // Restore metalness.
+    mat.roughness = snapshot.roughness; // Restore roughness.
+    mat.needsUpdate = true; // Mark material for update so renderer reuses the updated values safely.
+  };
+
+  const beginMaterialEdit = () => {
+    // Capture a "before" snapshot when the user starts changing material controls.
+    if (isSyncing) return; // Avoid capturing snapshots during programmatic UI sync.
+    const mat = getEditableStandardMaterial(); // Resolve the current editable material.
+    if (!mat) return; // Guard: no editable material.
+    materialEditMaterial = mat; // Track which material is being edited.
+    materialEditStart = captureMaterial(mat); // Capture starting values for undo.
+  };
+
+  const commitMaterialEdit = () => {
+    // Commit an undoable material edit command if anything changed.
+    const mat = materialEditMaterial; // Snapshot the material reference.
+    const before = materialEditStart; // Snapshot the starting values.
+    materialEditMaterial = null; // Clear edit state.
+    materialEditStart = null; // Clear edit state.
+    if (!mat || !before) return; // Guard: no recorded edit session.
+
+    const after = captureMaterial(mat); // Capture ending values for redo.
+    const changed =
+      before.color !== after.color || // Any color change counts.
+      Math.abs(before.metalness - after.metalness) > 1e-6 || // Ignore tiny float noise.
+      Math.abs(before.roughness - after.roughness) > 1e-6; // Ignore tiny float noise.
+    if (!changed) return; // Skip no-op edits.
+
+    editor.pushCommand({
+      // Push an undoable material command.
+      label: "Material", // Label used in history.
+      undo: () => applyMaterial(mat, before), // Undo restores "before".
+      redo: () => applyMaterial(mat, after), // Redo restores "after".
+    });
+  };
+
   // --- DOM -> scene wiring (write back into Three.js objects) ---
 
   nameInput.addEventListener("input", () => {
@@ -163,6 +234,30 @@ export function initInspectorUi(editor: Editor): void {
     if (!selected) return; // Guard: nothing selected.
     selected.name = nameInput.value; // Write name back to the Object3D.
     editor.notifySelectionUpdated(); // Notify listeners (Hierarchy re-renders to reflect the new name).
+  });
+
+  nameInput.addEventListener("focus", () => {
+    // Capture the starting name so we can create an undoable "Rename" command on change.
+    if (!selected) return; // Guard: nothing selected.
+    nameEditObject = selected; // Remember which object is being renamed.
+    nameEditStart = selected.name; // Capture the original name (could be empty string).
+  });
+
+  nameInput.addEventListener("change", () => {
+    // Commit an undoable rename command when the user finishes editing the name field.
+    const object = nameEditObject; // Snapshot object reference captured on focus.
+    const before = nameEditStart; // Snapshot original name captured on focus.
+    nameEditObject = null; // Clear edit state.
+    nameEditStart = null; // Clear edit state.
+    if (!object || before === null) return; // Guard: no recorded edit session.
+    const after = object.name; // Read the final name after the user's edits.
+    if (before === after) return; // Skip if nothing changed.
+    editor.pushCommand({
+      // Push an undoable command for rename.
+      label: "Rename", // Label used in history.
+      undo: () => (object.name = before), // Undo restores original name.
+      redo: () => (object.name = after), // Redo reapplies new name.
+    });
   });
 
   visibleInput.addEventListener("change", () => {
@@ -187,6 +282,37 @@ export function initInspectorUi(editor: Editor): void {
     });
   };
 
+  const beginTransformEdit = () => {
+    // Capture a "before" snapshot when the user focuses any transform input.
+    if (!selected) return; // Guard: no selection means nothing to record.
+    transformEditObject = selected; // Record which object is being edited.
+    transformEditStart = captureTransform(selected); // Snapshot starting transform for undo.
+  };
+
+  const commitTransformEdit = () => {
+    // Commit an undoable transform command when the user finishes editing a transform input.
+    const object = transformEditObject; // Snapshot the object captured at the start of the edit.
+    const before = transformEditStart; // Snapshot the starting transform.
+    transformEditObject = null; // Clear edit state.
+    transformEditStart = null; // Clear edit state.
+    if (!object || !before) return; // Guard: no recorded edit session.
+    const after = captureTransform(object); // Snapshot ending transform for redo.
+    if (!isTransformDifferent(before, after)) return; // Skip no-op edits.
+    editor.pushCommand({
+      // Push an undoable transform command.
+      label: "Transform (Inspector)", // Label used in history.
+      undo: () => applyTransform(object, before), // Undo restores "before".
+      redo: () => applyTransform(object, after), // Redo restores "after".
+    });
+  };
+
+  const transformInputs = [posX, posY, posZ, rotX, rotY, rotZ, scaleX, scaleY, scaleZ]; // All transform inputs.
+  transformInputs.forEach((input) => {
+    // Attach focus/change handlers to record undo history for inspector-driven transform edits.
+    input.addEventListener("focus", () => beginTransformEdit()); // Focus marks the start of an edit session.
+    input.addEventListener("change", () => commitTransformEdit()); // Change commits a history entry when editing finishes.
+  });
+
   bindNumber(posX, (v) => selected && (selected.position.x = v)); // Bind position X.
   bindNumber(posY, (v) => selected && (selected.position.y = v)); // Bind position Y.
   bindNumber(posZ, (v) => selected && (selected.position.z = v)); // Bind position Z.
@@ -202,9 +328,14 @@ export function initInspectorUi(editor: Editor): void {
   materialSlot.addEventListener("change", () => {
     // Switch which material slot the editor controls are targeting.
     if (isSyncing) return; // Ignore programmatic changes.
+    materialEditMaterial = null; // Clear any pending material edit session (slot change changes the target material).
+    materialEditStart = null; // Clear any pending material edit session.
     materialIndex = clampInt(Number(materialSlot.value), 0, meshMaterials.length - 1); // Clamp to a valid index.
     syncMaterialUi(); // Re-sync controls for the newly selected material.
   });
+
+  materialColor.addEventListener("focus", () => beginMaterialEdit()); // Record "before" values when starting a color edit.
+  materialColor.addEventListener("change", () => commitMaterialEdit()); // Commit undo history when the color edit is finished.
 
   materialColor.addEventListener("input", () => {
     // Update PBR base color.
@@ -213,6 +344,10 @@ export function initInspectorUi(editor: Editor): void {
     if (!mat) return; // Guard: no editable material.
     mat.color.set(materialColor.value); // Apply CSS hex color to Three.js Color.
   });
+
+  metalness.addEventListener("pointerdown", () => beginMaterialEdit()); // Record "before" values when starting a slider drag.
+  metalness.addEventListener("focus", () => beginMaterialEdit()); // Record "before" values for keyboard-driven changes too.
+  metalness.addEventListener("change", () => commitMaterialEdit()); // Commit undo history when the slider interaction ends.
 
   metalness.addEventListener("input", () => {
     // Update PBR metalness.
@@ -224,6 +359,10 @@ export function initInspectorUi(editor: Editor): void {
     mat.metalness = clamp01(value); // Apply clamped metalness.
     metalnessValue.textContent = mat.metalness.toFixed(2); // Update label.
   });
+
+  roughness.addEventListener("pointerdown", () => beginMaterialEdit()); // Record "before" values when starting a slider drag.
+  roughness.addEventListener("focus", () => beginMaterialEdit()); // Record "before" values for keyboard-driven changes too.
+  roughness.addEventListener("change", () => commitMaterialEdit()); // Commit undo history when the slider interaction ends.
 
   roughness.addEventListener("input", () => {
     // Update PBR roughness.
@@ -244,6 +383,12 @@ export function initInspectorUi(editor: Editor): void {
     selectedMesh = selection && (selection as THREE.Mesh).isMesh ? (selection as THREE.Mesh) : null; // Cache mesh selection.
     meshMaterials = selectedMesh ? getMeshMaterials(selectedMesh) : []; // Cache materials array for selected mesh.
     materialIndex = 0; // Reset slot to 0 on new selection (simple and predictable).
+    nameEditStart = null; // Clear pending rename history state when selection changes.
+    nameEditObject = null; // Clear pending rename history state.
+    transformEditStart = null; // Clear pending transform history state when selection changes.
+    transformEditObject = null; // Clear pending transform history state.
+    materialEditStart = null; // Clear pending material history state when selection changes.
+    materialEditMaterial = null; // Clear pending material history state.
     syncInspector(); // Update the entire inspector UI.
   });
 
@@ -252,6 +397,8 @@ export function initInspectorUi(editor: Editor): void {
     if (!selected) return; // Guard: no selection.
     if (isTextEditingActive(content)) return; // Avoid fighting the user's typing focus.
     isSyncing = true; // Guard input events while we update fields.
+    nameInput.value = selected.name; // Keep name input in sync (important for undo/redo rename).
+    visibleInput.checked = selected.visible; // Keep visibility checkbox in sync (future-proof for undo/redo).
     syncTransformInputs(); // Update position/rotation/scale inputs to match the live selection.
     syncMaterialUi(); // Refresh material UI (material properties could change via other tooling later).
     isSyncing = false; // End guarded sync.
@@ -305,4 +452,3 @@ function isTextEditingActive(container: HTMLElement): boolean {
   }
   return container.contains(active); // True if focus is inside the inspector panel.
 }
-

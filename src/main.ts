@@ -11,8 +11,10 @@ import { ModelLoader } from "./core/loader"; // Import the GLB/GLTF loader for d
 import { Viewer } from "./core/viewer"; // Import the Three.js viewer (scene/camera/renderer/loop).
 import { initControls } from "./ui/controls"; // Import DOM wiring that binds buttons/inputs to core logic.
 import { initEditorUi } from "./ui/editor"; // Import editor UI wiring (hierarchy + click-to-select).
+import { initExportUi } from "./ui/export"; // Import Export panel wiring (GLB download).
 import { initInspectorUi } from "./ui/inspector"; // Import Inspector panel wiring (transform + material editing).
 import { initSceneUi } from "./ui/scene"; // Import Scene panel wiring (background + lights).
+import { initShortcuts } from "./ui/shortcuts"; // Import keyboard shortcuts (Q/W/E/R, F, Esc, Del, undo/redo).
 import { initToolUi } from "./ui/tools"; // Import Tools panel wiring (Select/Move/Rotate/Scale + snapping).
 
 const canvas = document.getElementById("c") as HTMLCanvasElement | null; // Find the `<canvas id="c">` used for WebGL rendering.
@@ -36,3 +38,5 @@ initEditorUi(editor); // Wire editor panels (Hierarchy) and viewport picking to 
 initToolUi(editor); // Wire the transform tool panel to TransformControls.
 initInspectorUi(editor); // Wire the Inspector panel to the current selection.
 initSceneUi(viewer); // Wire the Scene panel to background and lighting settings.
+initExportUi(editor, animator); // Wire Export panel to GLTFExporter using the current model and animation clips.
+initShortcuts(viewer, editor); // Register Unity-like keyboard shortcuts for common editor actions.

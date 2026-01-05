@@ -10,6 +10,13 @@
 import * as THREE from "three"; // Import Three.js types + utilities (Raycaster, Vector2, BoxHelper, math helpers).
 import { TransformControls } from "three/examples/jsm/controls/TransformControls.js"; // Import Unity-like transform gizmos (move/rotate/scale).
 import type { Viewer } from "../viewer"; // Import Viewer type so Editor can access camera/scene/domElement.
+import { HistoryStack, type EditorCommand } from "./history"; // Import a small undo/redo stack for editor commands.
+import {
+  applyTransform, // Apply a transform snapshot back onto an Object3D (used for undo/redo).
+  captureTransform, // Capture an Object3D transform into an immutable snapshot.
+  isTransformDifferent, // Compare two transform snapshots to avoid pushing no-op history entries.
+  type TransformSnapshot, // Snapshot type for position/quaternion/scale.
+} from "./transformSnapshot"; // Import transform snapshot helpers.
 
 export type RootChangeListener = (root: THREE.Object3D | null) => void; // Listener type for model-root changes.
 export type SelectionChangeListener = (selection: THREE.Object3D | null) => void; // Listener type for selection changes.
@@ -24,6 +31,9 @@ export class Editor {
 
   private modelRoot: THREE.Object3D | null = null; // The current editable model root (null when no model loaded).
   private selection: THREE.Object3D | null = null; // The currently selected object inside the model root.
+  private sourceFileName: string | null = null; // The original filename of the loaded asset (used as a default export name).
+
+  private readonly history = new HistoryStack(); // Undo/redo stack for editor operations.
 
   private readonly raycaster = new THREE.Raycaster(); // Raycaster converts screen points into 3D intersection tests.
   private readonly pointerNdc = new THREE.Vector2(); // Pointer position in Normalized Device Coordinates (-1..1).
@@ -33,6 +43,8 @@ export class Editor {
   private readonly transformControls: TransformControls; // Transform gizmo that can attach to the current selection.
   private toolMode: ToolMode = "select"; // Current active tool mode (select by default).
   private isDraggingTransform = false; // True while the gizmo is actively dragging (used to avoid accidental picking).
+  private gizmoStart: TransformSnapshot | null = null; // Transform snapshot captured at the start of a gizmo drag.
+  private gizmoObject: THREE.Object3D | null = null; // Object that was being manipulated when the gizmo drag started.
 
   private snapEnabled = false; // Whether snapping is enabled for TransformControls.
   private translationSnap = 0.1; // World units per snap step for translation.
@@ -73,14 +85,57 @@ export class Editor {
       if (!selection) return; // Guard: no selection means nothing to notify.
       this.selectionUpdatedListeners.forEach((fn) => fn(selection)); // Notify UI so Inspector fields can live-update.
     });
+
+    this.transformControls.addEventListener("mouseDown", () => {
+      // Capture a "before" transform snapshot when the user begins a gizmo drag.
+      const selection = this.selection; // Snapshot current selection.
+      if (!selection) return; // Guard: no selection means nothing to record.
+      this.gizmoObject = selection; // Record which object is being manipulated.
+      this.gizmoStart = captureTransform(selection); // Capture starting transform for undo/redo.
+    });
+
+    this.transformControls.addEventListener("mouseUp", (e) => {
+      // When the gizmo drag ends, push an undoable transform command if anything changed.
+      const object = this.gizmoObject; // Read the object that was manipulated.
+      const before = this.gizmoStart; // Read the captured start snapshot.
+      this.gizmoObject = null; // Clear state so the next drag starts fresh.
+      this.gizmoStart = null; // Clear state so the next drag starts fresh.
+      if (!object || !before) return; // Guard: nothing to commit.
+
+      const after = captureTransform(object); // Capture ending transform for redo.
+      if (!isTransformDifferent(before, after)) return; // Skip no-op commands (e.g., click without moving).
+
+      const mode = String(
+        (e as unknown as { mode?: unknown }).mode ?? "transform", // TransformControls mouseUp includes a `mode` string.
+      ); // Normalize to a string.
+
+      this.history.push({
+        // Push a command that can undo/redo this transform change.
+        label: `Transform (${mode})`, // Label for potential future UI (history list).
+        undo: () => applyTransform(object, before), // Undo restores the start snapshot.
+        redo: () => applyTransform(object, after), // Redo restores the end snapshot.
+      });
+    });
   }
 
   public setModelRoot(root: THREE.Object3D | null): void {
     // Set the current editable model root (call when a model is loaded/unloaded).
     if (this.modelRoot === root) return; // Avoid redundant work if nothing changed.
     this.clearSelection(); // Clear selection so we never keep references to objects from the previous model.
+    this.history.clear(); // Clear undo/redo history because it may reference objects from the previous model.
     this.modelRoot = root; // Store the new root.
+    if (!root) this.sourceFileName = null; // Clear source filename when the model is unloaded.
     this.rootListeners.forEach((fn) => fn(root)); // Notify UI panels so they can rebuild hierarchy lists, etc.
+  }
+
+  public setSourceFileName(fileName: string | null): void {
+    // Store the original filename of the loaded asset (used for export naming).
+    this.sourceFileName = fileName; // Keep the name as-is (UI can strip extensions as needed).
+  }
+
+  public getSourceFileName(): string | null {
+    // Read the stored original filename of the current asset.
+    return this.sourceFileName; // Return filename (or null if none).
   }
 
   public getModelRoot(): THREE.Object3D | null {
@@ -145,6 +200,58 @@ export class Editor {
   public isTransformDragging(): boolean {
     // Expose whether the gizmo is currently dragging (useful to avoid accidental selection clears).
     return this.isDraggingTransform; // Return the internal flag.
+  }
+
+  public pushCommand(command: EditorCommand): void {
+    // Push a custom undoable command (used by UI like the Inspector for non-gizmo changes).
+    this.history.push(command); // Delegate to the HistoryStack implementation.
+  }
+
+  public undo(): void {
+    // Undo the most recent editor command.
+    this.history.undo(); // Undo the command via the history stack.
+    this.notifySelectionUpdated(); // Refresh inspector values if the selected object was affected.
+  }
+
+  public redo(): void {
+    // Redo the most recently undone editor command.
+    this.history.redo(); // Redo the command via the history stack.
+    this.notifySelectionUpdated(); // Refresh inspector values if the selected object was affected.
+  }
+
+  public deleteSelection(): void {
+    // Delete the currently selected object from the model hierarchy (undoable).
+    const selection = this.selection; // Snapshot selection.
+    if (!selection) return; // Guard: nothing to delete.
+    if (this.modelRoot && selection === this.modelRoot) return; // Do not allow deleting the model root (too destructive).
+
+    const parent = selection.parent; // Read current parent (needed to remove and restore).
+    if (!parent) return; // Guard: cannot delete objects that are not attached.
+
+    const index = parent.children.indexOf(selection); // Record the original index for stable undo ordering.
+    parent.remove(selection); // Remove from scene graph (stops rendering and updating).
+    this.clearSelection(); // Clear selection so gizmos/outline detach cleanly.
+
+    const restoreAtIndex = () => {
+      // Helper: re-add the object and restore its original sibling order as best as possible.
+      parent.add(selection); // Add back to parent (Three.js will append by default).
+      moveChildToIndex(parent, selection, index); // Reorder children array to restore the original index.
+    };
+
+    this.history.push({
+      // Push an undoable delete command.
+      label: "Delete", // Label for history UI.
+      undo: () => {
+        // Undo re-adds the object and re-selects it.
+        restoreAtIndex(); // Restore object into the hierarchy.
+        this.select(selection); // Reselect so the user can continue editing.
+      },
+      redo: () => {
+        // Redo removes the object again and clears selection.
+        parent.remove(selection); // Remove again.
+        this.clearSelection(); // Clear selection for consistency.
+      },
+    });
   }
 
   public setSnapEnabled(enabled: boolean): void {
@@ -261,6 +368,8 @@ export class Editor {
     this.transformControls.dispose(); // Remove event listeners and dispose gizmo geometry/materials.
     this.selection = null; // Clear selection reference.
     this.modelRoot = null; // Clear root reference.
+    this.sourceFileName = null; // Clear stored filename.
+    this.history.clear(); // Clear history to release closures referencing objects.
     this.rootListeners.clear(); // Drop all subscriptions (callers should also unsubscribe).
     this.selectionListeners.clear(); // Drop all subscriptions.
     this.selectionUpdatedListeners.clear(); // Drop subscriptions.
@@ -338,4 +447,13 @@ function isDescendantOrSelf(object: THREE.Object3D, root: THREE.Object3D): boole
     current = current.parent; // Move upward one level.
   }
   return false; // If we never reached root, the object is outside the subtree.
+}
+
+function moveChildToIndex(parent: THREE.Object3D, child: THREE.Object3D, targetIndex: number): void {
+  // Reorder `parent.children` so `child` ends up at `targetIndex`.
+  const currentIndex = parent.children.indexOf(child); // Find where the child currently lives.
+  if (currentIndex === -1) return; // If child isn't a child anymore, do nothing.
+  parent.children.splice(currentIndex, 1); // Remove child from its current position.
+  const clamped = Math.max(0, Math.min(targetIndex, parent.children.length)); // Clamp target index to valid bounds.
+  parent.children.splice(clamped, 0, child); // Insert child back at the desired index.
 }
