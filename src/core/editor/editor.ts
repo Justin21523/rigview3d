@@ -7,11 +7,16 @@
 //
 // Later phases extend this Editor with transform gizmos, undo/redo, export, etc.
 
-import * as THREE from "three"; // Import Three.js types + utilities (Raycaster, Vector2, BoxHelper).
+import * as THREE from "three"; // Import Three.js types + utilities (Raycaster, Vector2, BoxHelper, math helpers).
+import { TransformControls } from "three/examples/jsm/controls/TransformControls.js"; // Import Unity-like transform gizmos (move/rotate/scale).
 import type { Viewer } from "../viewer"; // Import Viewer type so Editor can access camera/scene/domElement.
 
 export type RootChangeListener = (root: THREE.Object3D | null) => void; // Listener type for model-root changes.
 export type SelectionChangeListener = (selection: THREE.Object3D | null) => void; // Listener type for selection changes.
+export type SelectionUpdatedListener = (selection: THREE.Object3D) => void; // Listener type for "selection changed in-place" updates (e.g., gizmo drag).
+
+export type ToolMode = "select" | "move" | "rotate" | "scale"; // Tool modes exposed to the UI (Unity-style Q/W/E/R mapping).
+export type ToolModeChangeListener = (mode: ToolMode) => void; // Listener type for tool mode changes.
 
 export class Editor {
   // The Editor coordinates selection state and editor-only helpers.
@@ -25,12 +30,49 @@ export class Editor {
 
   private selectionHelper: THREE.BoxHelper | null = null; // BoxHelper outline around the selected object.
 
+  private readonly transformControls: TransformControls; // Transform gizmo that can attach to the current selection.
+  private toolMode: ToolMode = "select"; // Current active tool mode (select by default).
+  private isDraggingTransform = false; // True while the gizmo is actively dragging (used to avoid accidental picking).
+
+  private snapEnabled = false; // Whether snapping is enabled for TransformControls.
+  private translationSnap = 0.1; // World units per snap step for translation.
+  private rotationSnapDeg = 15; // Degrees per snap step for rotation (converted to radians for TransformControls).
+  private scaleSnap = 0.1; // Scale units per snap step for scaling.
+  private space: "local" | "world" = "local"; // Local/world transform space for the gizmo.
+  private nudgeStep = 0.05; // World units per arrow-key nudge (wired in shortcuts later).
+
   private readonly rootListeners = new Set<RootChangeListener>(); // Subscribers for root changes.
   private readonly selectionListeners = new Set<SelectionChangeListener>(); // Subscribers for selection changes.
+  private readonly selectionUpdatedListeners = new Set<SelectionUpdatedListener>(); // Subscribers for in-place selection updates.
+  private readonly toolModeListeners = new Set<ToolModeChangeListener>(); // Subscribers for tool mode changes.
 
   constructor(viewer: Viewer) {
     // Create an Editor bound to a Viewer instance.
     this.viewer = viewer; // Store viewer reference for later picking/highlight rendering.
+
+    this.transformControls = new TransformControls(
+      this.viewer.getCamera(), // TransformControls needs the active camera for gizmo raycasting and orientation.
+      this.viewer.getDomElement(), // TransformControls needs the canvas DOM element to listen for pointer events.
+    ); // End TransformControls constructor call.
+    this.transformControls.visible = false; // Hide the gizmo until we have a selection + an active transform tool.
+    this.transformControls.enabled = false; // Disable pointer handling until the user switches away from Select mode.
+    this.viewer.getScene().add(this.transformControls); // Add gizmo to the scene so it renders in the viewport.
+
+    this.transformControls.addEventListener("dragging-changed", (e) => {
+      // TransformControls emits this event when the user starts/stops dragging the gizmo.
+      const dragging = Boolean(
+        (e as unknown as { value?: unknown }).value, // The event carries a `value` boolean (true while dragging).
+      ); // Convert to a strict boolean.
+      this.isDraggingTransform = dragging; // Store the state so the viewport picker can ignore clicks during drags.
+      this.viewer.setOrbitEnabled(!dragging); // Disable OrbitControls while dragging so camera doesn't fight the gizmo.
+    });
+
+    this.transformControls.addEventListener("objectChange", () => {
+      // This event fires when the attached object's transform changed (move/rotate/scale).
+      const selection = this.selection; // Snapshot selection into a local variable for type-narrowing safety.
+      if (!selection) return; // Guard: no selection means nothing to notify.
+      this.selectionUpdatedListeners.forEach((fn) => fn(selection)); // Notify UI so Inspector fields can live-update.
+    });
   }
 
   public setModelRoot(root: THREE.Object3D | null): void {
@@ -63,6 +105,97 @@ export class Editor {
     return () => this.selectionListeners.delete(listener); // Return cleanup callback.
   }
 
+  public onSelectionUpdated(listener: SelectionUpdatedListener): () => void {
+    // Subscribe to in-place updates of the selected object (e.g., gizmo dragged).
+    this.selectionUpdatedListeners.add(listener); // Register listener.
+    return () => this.selectionUpdatedListeners.delete(listener); // Return cleanup callback.
+  }
+
+  public notifySelectionUpdated(): void {
+    // Manually notify that the selected object changed without changing selection (used by the Inspector).
+    const selection = this.selection; // Snapshot selection into a local variable for type-narrowing safety.
+    if (!selection) return; // No selection means nothing to notify.
+    this.selectionUpdatedListeners.forEach((fn) => fn(selection)); // Notify all listeners with the current selection.
+  }
+
+  public getToolMode(): ToolMode {
+    // Expose current tool mode so the UI can highlight the active tool button.
+    return this.toolMode; // Return current mode string.
+  }
+
+  public onToolModeChange(listener: ToolModeChangeListener): () => void {
+    // Subscribe to tool mode changes (important once keyboard shortcuts can switch tools).
+    this.toolModeListeners.add(listener); // Register listener.
+    return () => this.toolModeListeners.delete(listener); // Return cleanup callback.
+  }
+
+  public setToolMode(mode: ToolMode): void {
+    // Set the active editor tool mode (Select/Move/Rotate/Scale).
+    if (this.toolMode === mode) return; // No-op if nothing changed.
+    this.toolMode = mode; // Store the new mode.
+
+    if (mode === "move") this.transformControls.setMode("translate"); // Map UI "move" to TransformControls "translate".
+    if (mode === "rotate") this.transformControls.setMode("rotate"); // Map UI "rotate" to TransformControls "rotate".
+    if (mode === "scale") this.transformControls.setMode("scale"); // Map UI "scale" to TransformControls "scale".
+
+    this.syncTransformControls(); // Attach/detach + enable/disable based on current selection and tool mode.
+    this.toolModeListeners.forEach((fn) => fn(mode)); // Notify listeners so UI can update active button state.
+  }
+
+  public isTransformDragging(): boolean {
+    // Expose whether the gizmo is currently dragging (useful to avoid accidental selection clears).
+    return this.isDraggingTransform; // Return the internal flag.
+  }
+
+  public setSnapEnabled(enabled: boolean): void {
+    // Enable/disable snapping for gizmo operations.
+    this.snapEnabled = enabled; // Store toggle state.
+    this.applyTransformSettings(); // Apply to TransformControls immediately.
+  }
+
+  public setTranslationSnap(step: number): void {
+    // Set translation snap step in world units.
+    if (!Number.isFinite(step)) return; // Ignore invalid values.
+    this.translationSnap = Math.max(0, step); // Clamp to 0+ to avoid negative snap steps.
+    this.applyTransformSettings(); // Apply to TransformControls.
+  }
+
+  public setRotationSnapDegrees(stepDeg: number): void {
+    // Set rotation snap step in degrees (UI uses degrees; TransformControls uses radians internally).
+    if (!Number.isFinite(stepDeg)) return; // Ignore invalid values.
+    this.rotationSnapDeg = Math.max(0, stepDeg); // Clamp to 0+ (0 effectively disables snapping).
+    this.applyTransformSettings(); // Apply updated snap.
+  }
+
+  public setScaleSnap(step: number): void {
+    // Set scale snap step in scale units.
+    if (!Number.isFinite(step)) return; // Ignore invalid values.
+    this.scaleSnap = Math.max(0, step); // Clamp to 0+ to avoid negative snap steps.
+    this.applyTransformSettings(); // Apply updated snap.
+  }
+
+  public setSpace(space: "local" | "world"): void {
+    // Set whether the gizmo operates in local space or world space.
+    this.space = space; // Store space setting.
+    this.applyTransformSettings(); // Apply to TransformControls immediately.
+  }
+
+  public getSpace(): "local" | "world" {
+    // Expose current gizmo space so UI can stay in sync.
+    return this.space; // Return the current space string.
+  }
+
+  public setNudgeStep(step: number): void {
+    // Set the arrow-key nudge step in world units.
+    if (!Number.isFinite(step)) return; // Ignore invalid values.
+    this.nudgeStep = Math.max(0, step); // Clamp to 0+ (0 effectively disables nudging).
+  }
+
+  public getNudgeStep(): number {
+    // Expose the configured nudge step for keyboard shortcuts.
+    return this.nudgeStep; // Return stored nudge amount.
+  }
+
   public select(object: THREE.Object3D | null): void {
     // Select an object inside the current model, or pass null to clear selection.
     if (object && this.modelRoot && !isDescendantOrSelf(object, this.modelRoot)) {
@@ -76,11 +209,13 @@ export class Editor {
     if (!this.selection) {
       // If selection is cleared...
       this.disposeSelectionHelper(); // ...remove outline helper from the scene and free GPU resources.
+      this.syncTransformControls(); // ...detach and hide transform controls since there's no target to manipulate.
       this.selectionListeners.forEach((fn) => fn(null)); // Notify listeners that selection is now empty.
       return; // Done.
     }
 
     this.ensureSelectionHelper(this.selection); // Create (or retarget) the BoxHelper to the new selection.
+    this.syncTransformControls(); // Attach gizmo to selection if the current tool mode requires it.
     this.selectionListeners.forEach((fn) => fn(this.selection)); // Notify listeners of the new selection.
   }
 
@@ -92,6 +227,7 @@ export class Editor {
   public pick(clientX: number, clientY: number): void {
     // Raycast from a screen point (mouse coordinates) and select the first hit object.
     if (!this.modelRoot) return; // Without a model root there is nothing to pick.
+    if (this.isDraggingTransform) return; // Avoid changing selection while the gizmo is mid-drag.
 
     const dom = this.viewer.getDomElement(); // The canvas element that receives pointer events.
     const rect = dom.getBoundingClientRect(); // Read the canvas position/size in CSS pixels.
@@ -121,10 +257,14 @@ export class Editor {
   public dispose(): void {
     // Dispose editor-owned helpers (useful if the app ever unmounts).
     this.disposeSelectionHelper(); // Free outline helper GPU resources.
+    this.viewer.getScene().remove(this.transformControls); // Remove gizmo from the scene graph.
+    this.transformControls.dispose(); // Remove event listeners and dispose gizmo geometry/materials.
     this.selection = null; // Clear selection reference.
     this.modelRoot = null; // Clear root reference.
     this.rootListeners.clear(); // Drop all subscriptions (callers should also unsubscribe).
     this.selectionListeners.clear(); // Drop all subscriptions.
+    this.selectionUpdatedListeners.clear(); // Drop subscriptions.
+    this.toolModeListeners.clear(); // Drop subscriptions.
   }
 
   private ensureSelectionHelper(target: THREE.Object3D): void {
@@ -148,6 +288,45 @@ export class Editor {
     this.selectionHelper.dispose(); // Dispose helper geometry/material (BoxHelper provides a dispose() convenience).
     this.selectionHelper = null; // Clear reference so GC can collect the JS object.
   }
+
+  private syncTransformControls(): void {
+    // Ensure TransformControls attachment/visibility/enabled state matches selection + tool mode.
+    this.transformControls.setSpace(this.space); // Apply current space setting (local/world).
+    this.applyTransformSettings(); // Apply snap settings (translation/rotation/scale snap).
+
+    if (this.toolMode === "select") {
+      // Select tool means no gizmo in the viewport.
+      this.transformControls.enabled = false; // Disable pointer interactions so the gizmo does not capture events.
+      this.transformControls.detach(); // Detach hides the gizmo and clears axis state.
+      return; // Done.
+    }
+
+    this.transformControls.enabled = true; // Enable pointer interactions for transform tools.
+
+    if (!this.selection) {
+      // If we have no selection, keep gizmo hidden even though a transform tool is active.
+      this.transformControls.detach(); // Ensure it is detached and invisible.
+      return; // Done.
+    }
+
+    this.transformControls.attach(this.selection); // Attach gizmo to the selected object so user can manipulate it.
+  }
+
+  private applyTransformSettings(): void {
+    // Apply snapping + space settings to TransformControls.
+    this.transformControls.setSpace(this.space); // Set local/world space for gizmo axes orientation.
+
+    const translationSnap = this.snapEnabled ? this.translationSnap : null; // Use null when snapping is disabled.
+    this.transformControls.setTranslationSnap(translationSnap); // Apply translation snap (0/ null disables in TransformControls internals).
+
+    const rotationSnap = this.snapEnabled
+      ? THREE.MathUtils.degToRad(this.rotationSnapDeg) // Convert UI degrees to radians required by TransformControls.
+      : null; // Disable rotation snap when snapping toggle is off.
+    this.transformControls.setRotationSnap(rotationSnap); // Apply rotation snap step.
+
+    const scaleSnap = this.snapEnabled ? this.scaleSnap : null; // Disable scale snap when snapping toggle is off.
+    this.transformControls.setScaleSnap(scaleSnap); // Apply scale snap step.
+  }
 }
 
 function isDescendantOrSelf(object: THREE.Object3D, root: THREE.Object3D): boolean {
@@ -160,4 +339,3 @@ function isDescendantOrSelf(object: THREE.Object3D, root: THREE.Object3D): boole
   }
   return false; // If we never reached root, the object is outside the subtree.
 }
-

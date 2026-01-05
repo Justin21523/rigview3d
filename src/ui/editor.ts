@@ -61,6 +61,7 @@ export function initEditorUi(editor: Editor): void {
   canvas.addEventListener("click", (e) => {
     // Clicking in the viewport performs raycast picking to select objects.
     if (e.button !== 0) return; // Only respond to left-click selection.
+    if (editor.isTransformDragging()) return; // Ignore clicks while the gizmo is mid-drag (prevents accidental selection clears).
     editor.pick(e.clientX, e.clientY); // Convert the click position into a raycast and update selection.
   });
 
@@ -89,6 +90,11 @@ export function initEditorUi(editor: Editor): void {
   editor.onSelectionChange(() => {
     // Re-render the hierarchy list when selection changes (updates selected highlight row).
     render(); // Simple full re-render keeps behavior predictable for a learning project.
+  });
+
+  editor.onSelectionUpdated(() => {
+    // Re-render the hierarchy list when the selected object changes in-place (e.g., renaming).
+    render(); // This keeps labels (like node names) up-to-date.
   });
 
   currentRoot = editor.getModelRoot(); // Initialize from current editor state (important if init order changes).

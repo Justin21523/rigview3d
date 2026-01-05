@@ -11,6 +11,9 @@ import { ModelLoader } from "./core/loader"; // Import the GLB/GLTF loader for d
 import { Viewer } from "./core/viewer"; // Import the Three.js viewer (scene/camera/renderer/loop).
 import { initControls } from "./ui/controls"; // Import DOM wiring that binds buttons/inputs to core logic.
 import { initEditorUi } from "./ui/editor"; // Import editor UI wiring (hierarchy + click-to-select).
+import { initInspectorUi } from "./ui/inspector"; // Import Inspector panel wiring (transform + material editing).
+import { initSceneUi } from "./ui/scene"; // Import Scene panel wiring (background + lights).
+import { initToolUi } from "./ui/tools"; // Import Tools panel wiring (Select/Move/Rotate/Scale + snapping).
 
 const canvas = document.getElementById("c") as HTMLCanvasElement | null; // Find the `<canvas id="c">` used for WebGL rendering.
 if (!canvas) throw new Error("Canvas element not found."); // Fail fast if the expected element is missing (prevents null errors later).
@@ -30,3 +33,6 @@ viewer.start(); // Start the requestAnimationFrame loop (renders continuously).
 const loader = new ModelLoader(); // Create a loader instance for local drag-and-drop files.
 initControls({ viewer, loader, animator, helpers, editor }); // Wire the main UI controls to core systems.
 initEditorUi(editor); // Wire editor panels (Hierarchy) and viewport picking to the Editor instance.
+initToolUi(editor); // Wire the transform tool panel to TransformControls.
+initInspectorUi(editor); // Wire the Inspector panel to the current selection.
+initSceneUi(viewer); // Wire the Scene panel to background and lighting settings.

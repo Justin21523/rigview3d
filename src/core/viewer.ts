@@ -16,6 +16,9 @@ export class Viewer {
   private camera!: THREE.PerspectiveCamera; // PerspectiveCamera gives a realistic 3D projection.
   private controls!: OrbitControls; // OrbitControls updates the camera based on user input.
 
+  private hemiLight!: THREE.HemisphereLight; // Fill/ambient light used by the Scene panel (intensity slider).
+  private dirLight!: THREE.DirectionalLight; // Key light used by the Scene panel (intensity slider).
+
   private rafId: number | null = null; // Track the current requestAnimationFrame id (so we can cancel it).
   private readonly clock = new THREE.Clock(); // Clock provides delta time between frames (useful for animation).
   private onTick: ((deltaSeconds: number) => void) | null = null; // Optional callback invoked once per frame.
@@ -51,6 +54,45 @@ export class Viewer {
     this.controls.enabled = enabled; // OrbitControls checks this flag before responding to input.
   }
 
+  public setBackground(color: THREE.ColorRepresentation): void {
+    // Set the scene background color (called from the Scene panel color picker).
+    const bg = this.scene.background; // Scene background can be a Color, Texture, or null.
+    if (bg && (bg as THREE.Color).isColor) {
+      // If background is already a Color, mutate it in-place to avoid allocations.
+      (bg as THREE.Color).set(color); // Update the existing color value.
+    } else {
+      // Otherwise create a new Color object for the background.
+      this.scene.background = new THREE.Color(color); // Assign a new background color.
+    }
+  }
+
+  public getBackgroundColorHex(): string {
+    // Return the current background color as a CSS hex string (e.g. "#0b0e14").
+    const bg = this.scene.background; // Read current background value.
+    if (bg && (bg as THREE.Color).isColor) return `#${(bg as THREE.Color).getHexString()}`; // Convert Three.js Color to hex string.
+    return "#000000"; // Fallback if background is not a Color (should not happen in this app).
+  }
+
+  public setKeyLightIntensity(intensity: number): void {
+    // Set the key (directional) light intensity.
+    this.dirLight.intensity = intensity; // Update intensity used in lighting calculations.
+  }
+
+  public getKeyLightIntensity(): number {
+    // Read the key (directional) light intensity for UI initialization.
+    return this.dirLight.intensity; // Return current directional intensity.
+  }
+
+  public setFillLightIntensity(intensity: number): void {
+    // Set the fill (hemisphere) light intensity.
+    this.hemiLight.intensity = intensity; // Update intensity used in lighting calculations.
+  }
+
+  public getFillLightIntensity(): number {
+    // Read the fill (hemisphere) light intensity for UI initialization.
+    return this.hemiLight.intensity; // Return current hemisphere intensity.
+  }
+
   private init(): void {
     // Initialize all Three.js objects owned by Viewer.
     this.scene = new THREE.Scene(); // Create a new Scene (a container for objects).
@@ -73,13 +115,13 @@ export class Viewer {
     this.controls.target.copy(this.defaultTarget); // Set the orbit pivot point.
 
     // Lights (simple, stable)
-    const hemi = new THREE.HemisphereLight(0xffffff, 0x223344, 0.9); // Soft ambient light from sky/ground colors.
-    this.scene.add(hemi); // Add the hemisphere light to the scene so it affects shading.
+    this.hemiLight = new THREE.HemisphereLight(0xffffff, 0x223344, 0.9); // Soft ambient light from sky/ground colors.
+    this.scene.add(this.hemiLight); // Add the hemisphere light to the scene so it affects shading.
 
-    const dir = new THREE.DirectionalLight(0xffffff, 1.2); // Directional light simulates sunlight.
-    dir.position.set(4, 6, 3); // Position the light so it shines toward the origin.
-    dir.castShadow = false; // Disable shadows to keep the MVP simple and fast.
-    this.scene.add(dir); // Add the directional light to the scene.
+    this.dirLight = new THREE.DirectionalLight(0xffffff, 1.2); // Directional light simulates sunlight.
+    this.dirLight.position.set(4, 6, 3); // Position the light so it shines toward the origin.
+    this.dirLight.castShadow = false; // Disable shadows to keep the MVP simple and fast.
+    this.scene.add(this.dirLight); // Add the directional light to the scene.
 
     this.resize(); // Perform an initial resize to sync camera aspect and renderer size.
   }
