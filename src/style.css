@@ -1,193 +1,194 @@
-:root {
-  font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell,
-    Noto Sans, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
-  color-scheme: dark;
-}
+/* src/style.css */
+/* Global styling for the RigView3D UI (plain CSS, no framework). */
 
-html,
-body {
-  margin: 0;
-  height: 100%;
-  background: #0b0e14;
-  color: #e6e6e6;
-}
+:root { /* Root-level defaults shared across the entire document. */
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji"; /* Use a modern cross-platform system font stack. */
+  color-scheme: dark; /* Hint to the browser that we use a dark theme (affects built-in form controls). */
+} /* End :root defaults. */
 
-#app {
-  height: 100%;
-  display: grid;
-  grid-template-rows: auto 1fr;
-}
+html, body { /* Make the page fill the viewport and match the app's dark theme. */
+  margin: 0; /* Remove default browser margins so our layout is edge-to-edge. */
+  height: 100%; /* Ensure the app can take full height. */
+  background: #0b0e14; /* Dark background behind all UI and the canvas. */
+  color: #e6e6e6; /* Default text color for readability on dark background. */
+} /* End html/body base styles. */
 
-.topbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 12px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-}
+#app { /* Top-level app container. */
+  height: 100%; /* Fill the full viewport height. */
+  display: grid; /* Use CSS grid to create a top bar + main content layout. */
+  grid-template-rows: auto 1fr; /* First row is header, second row fills remaining space. */
+} /* End #app layout. */
 
-.brand {
-  font-weight: 700;
-  letter-spacing: 0.3px;
-}
+.topbar { /* Header row containing brand and reset button. */
+  display: flex; /* Use flexbox to align items horizontally. */
+  align-items: center; /* Vertically center items within the bar. */
+  justify-content: space-between; /* Push brand left and button right. */
+  padding: 10px 12px; /* Give the header some breathing room. */
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08); /* Subtle divider line below the header. */
+} /* End .topbar styles. */
 
-.btn {
-  background: rgba(255, 255, 255, 0.08);
-  color: #e6e6e6;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  padding: 8px 10px;
-  border-radius: 10px;
-  cursor: pointer;
-}
+.brand { /* App name text in the header. */
+  font-weight: 700; /* Make the brand visually prominent. */
+  letter-spacing: 0.3px; /* Slight spacing for a cleaner logotype feel. */
+} /* End .brand styles. */
 
-.btn:hover {
-  background: rgba(255, 255, 255, 0.12);
-}
+.btn { /* Base button style for the app. */
+  background: rgba(255, 255, 255, 0.08); /* Semi-transparent background for dark UI. */
+  color: #e6e6e6; /* Light text color. */
+  border: 1px solid rgba(255, 255, 255, 0.12); /* Subtle border to separate from background. */
+  padding: 8px 10px; /* Comfortable click/tap area. */
+  border-radius: 10px; /* Rounded corners for modern look. */
+  cursor: pointer; /* Show pointer cursor to indicate clickability. */
+} /* End .btn styles. */
 
-.main {
-  display: grid;
-  grid-template-columns: 340px 1fr;
-  min-height: 0;
-}
+.btn:hover { /* Hover state for buttons on desktop. */
+  background: rgba(255, 255, 255, 0.12); /* Slightly brighter to indicate hover. */
+} /* End .btn:hover. */
 
-.sidebar {
-  border-right: 1px solid rgba(255, 255, 255, 0.08);
-  padding: 12px;
-  overflow: auto;
-}
+.main { /* Main content area: sidebar + 3D viewport. */
+  display: grid; /* Grid makes a fixed-width sidebar and fluid viewport easy. */
+  grid-template-columns: 340px 1fr; /* Sidebar fixed width, viewport fills remaining space. */
+  min-height: 0; /* Allow children to shrink/scroll properly within a grid container. */
+} /* End .main layout. */
 
-.panel {
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 14px;
-  padding: 12px;
-}
+.sidebar { /* Left panel column containing controls and info. */
+  border-right: 1px solid rgba(255, 255, 255, 0.08); /* Visual separation from the 3D viewport. */
+  padding: 12px; /* Inner spacing around panels. */
+  overflow: auto; /* Allow sidebar to scroll if content exceeds height. */
+} /* End .sidebar styles. */
 
-.panel + .panel {
-  margin-top: 12px;
-}
+.panel { /* Reusable panel card style in sidebar. */
+  background: rgba(255, 255, 255, 0.04); /* Slightly tinted background to stand out from page. */
+  border: 1px solid rgba(255, 255, 255, 0.08); /* Subtle border for definition. */
+  border-radius: 14px; /* Rounded panel corners. */
+  padding: 12px; /* Inner padding for panel content. */
+} /* End .panel styles. */
 
-.panel-title {
-  margin: 0 0 10px;
-  font-size: 12px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.75);
-}
+.panel + .panel { /* Space between consecutive panels. */
+  margin-top: 12px; /* Vertical spacing to avoid cramped UI. */
+} /* End .panel spacing. */
 
-.dropzone {
-  border: 1px dashed rgba(255, 255, 255, 0.22);
-  border-radius: 14px;
-  padding: 14px;
-  cursor: pointer;
-  background: rgba(255, 255, 255, 0.03);
-  outline: none;
-}
+.panel-title { /* Small uppercase panel headings. */
+  margin: 0 0 10px; /* Remove default margins; keep space below title. */
+  font-size: 12px; /* Compact heading size. */
+  letter-spacing: 0.12em; /* Spaced letters to match the UI aesthetic. */
+  text-transform: uppercase; /* Make headings look like labels. */
+  color: rgba(255, 255, 255, 0.75); /* Slightly muted text. */
+} /* End .panel-title styles. */
 
-.dropzone:focus {
-  border-color: rgba(122, 162, 247, 0.9);
-  box-shadow: 0 0 0 3px rgba(122, 162, 247, 0.25);
-}
+.dropzone { /* Drag-and-drop target box. */
+  border: 1px dashed rgba(255, 255, 255, 0.22); /* Dashed border communicates "drop here". */
+  border-radius: 14px; /* Rounded dropzone corners. */
+  padding: 14px; /* Padding for text inside dropzone. */
+  cursor: pointer; /* Indicate clickability (opens file picker). */
+  background: rgba(255, 255, 255, 0.03); /* Slight background tint. */
+  outline: none; /* Remove default focus outline (we provide a custom focus style). */
+} /* End .dropzone styles. */
 
-.dropzone.is-dragover {
-  border-color: rgba(122, 162, 247, 0.9);
-  background: rgba(122, 162, 247, 0.08);
-}
+.dropzone:focus { /* Keyboard focus style for accessibility. */
+  border-color: rgba(122, 162, 247, 0.9); /* Highlight border when focused. */
+  box-shadow: 0 0 0 3px rgba(122, 162, 247, 0.25); /* Add a focus ring glow. */
+} /* End .dropzone:focus. */
 
-.dropzone-title {
-  font-weight: 700;
-}
+.dropzone.is-dragover { /* Visual feedback when files are dragged over the dropzone. */
+  border-color: rgba(122, 162, 247, 0.9); /* Stronger border color. */
+  background: rgba(122, 162, 247, 0.08); /* Slight blue tint background. */
+} /* End .dropzone drag-over state. */
 
-.dropzone-subtitle {
-  margin-top: 2px;
-  color: rgba(255, 255, 255, 0.75);
-}
+.dropzone-title { /* Main dropzone title line. */
+  font-weight: 700; /* Emphasize primary instruction. */
+} /* End .dropzone-title. */
 
-.dropzone-hint {
-  margin-top: 8px;
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.6);
-  line-height: 1.35;
-}
+.dropzone-subtitle { /* Secondary instruction line. */
+  margin-top: 2px; /* Small separation from title. */
+  color: rgba(255, 255, 255, 0.75); /* Slightly muted text. */
+} /* End .dropzone-subtitle. */
 
-.info-grid {
-  display: grid;
-  grid-template-columns: 90px 1fr;
-  gap: 6px 10px;
-  margin: 0;
-}
+.dropzone-hint { /* Small hint text explaining .gltf multi-file drops. */
+  margin-top: 8px; /* Spacing from subtitle. */
+  font-size: 12px; /* Smaller hint size. */
+  color: rgba(255, 255, 255, 0.6); /* More muted text. */
+  line-height: 1.35; /* Comfortable line height for multi-line hint. */
+} /* End .dropzone-hint. */
 
-.info-grid dt {
-  color: rgba(255, 255, 255, 0.7);
-}
+.info-grid { /* Definition list styled as a 2-column grid. */
+  display: grid; /* Use grid for aligned labels and values. */
+  grid-template-columns: 90px 1fr; /* Fixed width label column, flexible value column. */
+  gap: 6px 10px; /* Row/column gaps. */
+  margin: 0; /* Remove default dl margin. */
+} /* End .info-grid. */
 
-.info-grid dd {
-  margin: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
+.info-grid dt { /* Labels (terms) in info panel. */
+  color: rgba(255, 255, 255, 0.7); /* Slightly muted label color. */
+} /* End .info-grid dt. */
 
-.field {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  align-items: center;
-  gap: 10px;
-  margin-top: 10px;
-}
+.info-grid dd { /* Values (definitions) in info panel. */
+  margin: 0; /* Remove default dd margin. */
+  overflow: hidden; /* Hide overflow so long filenames don't break layout. */
+  text-overflow: ellipsis; /* Show ellipsis when text is truncated. */
+  white-space: nowrap; /* Keep values on one line. */
+} /* End .info-grid dd. */
 
-.field-label {
-  color: rgba(255, 255, 255, 0.7);
-  font-size: 13px;
-}
+.field { /* A row containing a label and an input/control. */
+  display: grid; /* Use grid to align label and value/control. */
+  grid-template-columns: 1fr auto; /* Label grows, control stays compact. */
+  align-items: center; /* Vertically center within the row. */
+  gap: 10px; /* Space between label and control/value. */
+  margin-top: 10px; /* Vertical spacing between fields. */
+} /* End .field. */
 
-.field-value {
-  font-variant-numeric: tabular-nums;
-  color: rgba(255, 255, 255, 0.8);
-  font-size: 13px;
-}
+.field-label { /* Field label text. */
+  color: rgba(255, 255, 255, 0.7); /* Muted label color. */
+  font-size: 13px; /* Slightly smaller than base text. */
+} /* End .field-label. */
 
-.row {
-  display: flex;
-  gap: 8px;
-  margin-top: 10px;
-}
+.field-value { /* Small value label for sliders (e.g., speed multiplier). */
+  font-variant-numeric: tabular-nums; /* Monospaced digits for stable alignment. */
+  color: rgba(255, 255, 255, 0.8); /* Slightly brighter than label. */
+  font-size: 13px; /* Match label size. */
+} /* End .field-value. */
 
-.btn-small {
-  padding: 7px 9px;
-  border-radius: 12px;
-}
+.row { /* Simple horizontal row for button groups. */
+  display: flex; /* Flexbox makes equal-height buttons easy. */
+  gap: 8px; /* Space between buttons. */
+  margin-top: 10px; /* Space above button row. */
+} /* End .row. */
 
-.select {
-  width: 100%;
-  max-width: 190px;
-  background: rgba(255, 255, 255, 0.06);
-  color: #e6e6e6;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 10px;
-  padding: 7px 10px;
-}
+.btn-small { /* Smaller button variant used inside panels. */
+  padding: 7px 9px; /* Slightly tighter padding than base .btn. */
+  border-radius: 12px; /* Slightly rounder corners. */
+} /* End .btn-small. */
 
-.range {
-  width: 100%;
-}
+.select { /* Styling for `<select>` elements in dark UI. */
+  width: 100%; /* Allow select to fill available horizontal space. */
+  max-width: 190px; /* Keep select from becoming too wide in the sidebar. */
+  background: rgba(255, 255, 255, 0.06); /* Dark UI background tint. */
+  color: #e6e6e6; /* Light text color. */
+  border: 1px solid rgba(255, 255, 255, 0.12); /* Subtle border. */
+  border-radius: 10px; /* Rounded corners. */
+  padding: 7px 10px; /* Internal padding for readable text. */
+} /* End .select. */
 
-.checkbox {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: 10px;
-  color: rgba(255, 255, 255, 0.85);
-  user-select: none;
-}
+.range { /* Range input should fill the field width. */
+  width: 100%; /* Make slider full width for easier control. */
+} /* End .range. */
 
-.viewport {
-  position: relative;
-  overflow: hidden;
-}
+.checkbox { /* Checkbox row layout. */
+  display: flex; /* Align checkbox and label inline. */
+  align-items: center; /* Vertically center checkbox with label. */
+  gap: 10px; /* Space between checkbox and label text. */
+  margin-top: 10px; /* Spacing above checkbox row. */
+  color: rgba(255, 255, 255, 0.85); /* Slightly brighter label text. */
+  user-select: none; /* Prevent accidental text selection while clicking. */
+} /* End .checkbox. */
 
-#c {
-  width: 100%;
-  height: 100%;
-  display: block;
-}
+.viewport { /* Container that holds the WebGL canvas. */
+  position: relative; /* Establish positioning context if overlays are added later. */
+  overflow: hidden; /* Prevent canvas overflow from showing scrollbars. */
+} /* End .viewport. */
+
+#c { /* The actual `<canvas>` used by Three.js WebGLRenderer. */
+  width: 100%; /* Match parent width (CSS size). */
+  height: 100%; /* Match parent height (CSS size). */
+  display: block; /* Remove inline-canvas baseline whitespace gaps. */
+} /* End #c. */

@@ -1,119 +1,97 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>RigView3D</title>
-  </head>
-  <body>
-    <div id="app">
-      <header class="topbar">
-        <div class="brand">RigView3D</div>
-        <button id="btn-reset-camera" class="btn">Reset Camera</button>
-      </header>
-      <div class="main">
-        <aside class="sidebar">
-          <section class="panel">
-            <h2 class="panel-title">Load</h2>
-            <div
-              id="dropzone"
-              class="dropzone"
-              role="button"
-              tabindex="0"
-              aria-label="Drop GLB/GLTF files here or click to select"
-            >
-              <div class="dropzone-title">Drop a .glb/.gltf here</div>
-              <div class="dropzone-subtitle">or click to browse</div>
-              <div class="dropzone-hint">
-                For .gltf, drop the .gltf + .bin + textures together.
-              </div>
-            </div>
-            <input
-              id="file-input"
-              type="file"
-              hidden
-              multiple
-              accept=".glb,.gltf,.bin,.png,.jpg,.jpeg,.webp"
-            />
-          </section>
+<!doctype html> <!-- Use the HTML5 doctype so browsers render in standards mode. -->
+<html lang="en"> <!-- Declare the document language for accessibility and SEO. -->
+  <head> <!-- Metadata and resources (not visible UI). -->
+    <meta charset="UTF-8" /> <!-- Use UTF-8 so all Unicode characters render correctly. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /> <!-- Responsive layout on mobile devices. -->
+    <title>RigView3D</title> <!-- Browser tab title. -->
+  </head> <!-- End head. -->
+  <body> <!-- Visible UI starts here. -->
+    <div id="app"> <!-- Root wrapper used for full-height layout. -->
+      <header class="topbar"> <!-- Top bar containing brand and global actions. -->
+        <div class="brand">RigView3D</div> <!-- App name/brand label. -->
+        <button id="btn-reset-camera" class="btn">Reset Camera</button> <!-- Button wired in TS to reset orbit camera. -->
+      </header> <!-- End topbar. -->
 
-          <section class="panel">
-            <h2 class="panel-title">Info</h2>
-            <dl class="info-grid">
-              <dt>File</dt>
-              <dd id="info-file">—</dd>
-              <dt>Meshes</dt>
-              <dd id="info-meshes">—</dd>
-              <dt>Materials</dt>
-              <dd id="info-materials">—</dd>
-              <dt>Bones</dt>
-              <dd id="info-bones">—</dd>
-              <dt>Clips</dt>
-              <dd id="info-clips">—</dd>
-            </dl>
-          </section>
+      <div class="main"> <!-- Two-column layout: sidebar (controls) + viewport (canvas). -->
+        <aside class="sidebar"> <!-- Sidebar contains panels with load/info/controls. -->
+          <section class="panel"> <!-- Panel: model loading. -->
+            <h2 class="panel-title">Load</h2> <!-- Panel heading. -->
+            <div id="dropzone" class="dropzone" role="button" tabindex="0" aria-label="Drop GLB/GLTF files here or click to select"> <!-- Drag-and-drop target + click-to-browse. -->
+              <div class="dropzone-title">Drop a .glb/.gltf here</div> <!-- Primary instruction. -->
+              <div class="dropzone-subtitle">or click to browse</div> <!-- Secondary instruction. -->
+              <div class="dropzone-hint">For .gltf, drop the .gltf + .bin + textures together.</div> <!-- Hint for multi-file glTF loads. -->
+            </div> <!-- End dropzone. -->
+            <input id="file-input" type="file" hidden multiple accept=".glb,.gltf,.bin,.png,.jpg,.jpeg,.webp" /> <!-- Hidden file input used when dropzone is clicked. -->
+          </section> <!-- End Load panel. -->
 
-          <section class="panel">
-            <h2 class="panel-title">Animation</h2>
+          <section class="panel"> <!-- Panel: model info. -->
+            <h2 class="panel-title">Info</h2> <!-- Panel heading. -->
+            <dl class="info-grid"> <!-- Definition list formatted as a grid (labels + values). -->
+              <dt>File</dt> <!-- Label: filename. -->
+              <dd id="info-file">—</dd> <!-- Value: filename or error/loading status. -->
+              <dt>Meshes</dt> <!-- Label: mesh count. -->
+              <dd id="info-meshes">—</dd> <!-- Value: mesh count. -->
+              <dt>Materials</dt> <!-- Label: material count. -->
+              <dd id="info-materials">—</dd> <!-- Value: material count. -->
+              <dt>Bones</dt> <!-- Label: bone count. -->
+              <dd id="info-bones">—</dd> <!-- Value: bone count. -->
+              <dt>Clips</dt> <!-- Label: animation clip count. -->
+              <dd id="info-clips">—</dd> <!-- Value: clip count. -->
+            </dl> <!-- End info grid. -->
+          </section> <!-- End Info panel. -->
 
-            <label class="field">
-              <span class="field-label">Clip</span>
-              <select id="anim-clip" class="select" disabled></select>
-            </label>
+          <section class="panel"> <!-- Panel: animation controls. -->
+            <h2 class="panel-title">Animation</h2> <!-- Panel heading. -->
+            <label class="field"> <!-- Field row: clip selector. -->
+              <span class="field-label">Clip</span> <!-- Label for the clip dropdown. -->
+              <select id="anim-clip" class="select" disabled></select> <!-- Dropdown populated by TS after model load. -->
+            </label> <!-- End clip selector field. -->
 
-            <div class="row">
-              <button id="anim-play" class="btn btn-small" disabled>Play</button>
-              <button id="anim-pause" class="btn btn-small" disabled>Pause</button>
-              <button id="anim-stop" class="btn btn-small" disabled>Stop</button>
-            </div>
+            <div class="row"> <!-- Button row for Play/Pause/Stop. -->
+              <button id="anim-play" class="btn btn-small" disabled>Play</button> <!-- Start playback. -->
+              <button id="anim-pause" class="btn btn-small" disabled>Pause</button> <!-- Toggle pause/resume. -->
+              <button id="anim-stop" class="btn btn-small" disabled>Stop</button> <!-- Stop playback. -->
+            </div> <!-- End button row. -->
 
-            <label class="field">
-              <span class="field-label">Speed</span>
-              <input
-                id="anim-speed"
-                class="range"
-                type="range"
-                min="0.25"
-                max="2"
-                step="0.05"
-                value="1"
-                disabled
-              />
-              <span id="anim-speed-value" class="field-value">1.00x</span>
-            </label>
+            <label class="field"> <!-- Field row: speed control. -->
+              <span class="field-label">Speed</span> <!-- Label for the speed slider. -->
+              <input id="anim-speed" class="range" type="range" min="0.25" max="2" step="0.05" value="1" disabled /> <!-- Slider controlling animator timeScale. -->
+              <span id="anim-speed-value" class="field-value">1.00x</span> <!-- Live label showing the selected speed multiplier. -->
+            </label> <!-- End speed field. -->
 
-            <label class="checkbox">
-              <input id="anim-loop" type="checkbox" checked disabled />
-              <span>Loop</span>
-            </label>
-          </section>
+            <label class="checkbox"> <!-- Checkbox row: loop mode. -->
+              <input id="anim-loop" type="checkbox" checked disabled /> <!-- Checked = repeat; unchecked = play once. -->
+              <span>Loop</span> <!-- Loop label text. -->
+            </label> <!-- End loop row. -->
+          </section> <!-- End Animation panel. -->
 
-          <section class="panel">
-            <h2 class="panel-title">Debug</h2>
-            <label class="checkbox">
-              <input id="dbg-grid" type="checkbox" checked />
-              <span>Grid</span>
-            </label>
-            <label class="checkbox">
-              <input id="dbg-axes" type="checkbox" checked />
-              <span>Axes</span>
-            </label>
-            <label class="checkbox">
-              <input id="dbg-skeleton" type="checkbox" disabled />
-              <span>Skeleton</span>
-            </label>
-            <label class="checkbox">
-              <input id="dbg-wireframe" type="checkbox" disabled />
-              <span>Wireframe</span>
-            </label>
-          </section>
-        </aside>
+          <section class="panel"> <!-- Panel: debug toggles (helpers). -->
+            <h2 class="panel-title">Debug</h2> <!-- Panel heading. -->
+            <label class="checkbox"> <!-- Checkbox row: grid toggle. -->
+              <input id="dbg-grid" type="checkbox" checked /> <!-- Toggle GridHelper on/off. -->
+              <span>Grid</span> <!-- Grid label text. -->
+            </label> <!-- End grid row. -->
+            <label class="checkbox"> <!-- Checkbox row: axes toggle. -->
+              <input id="dbg-axes" type="checkbox" checked /> <!-- Toggle AxesHelper on/off. -->
+              <span>Axes</span> <!-- Axes label text. -->
+            </label> <!-- End axes row. -->
+            <label class="checkbox"> <!-- Checkbox row: skeleton toggle. -->
+              <input id="dbg-skeleton" type="checkbox" disabled /> <!-- Enabled only when the model has a SkinnedMesh. -->
+              <span>Skeleton</span> <!-- Skeleton label text. -->
+            </label> <!-- End skeleton row. -->
+            <label class="checkbox"> <!-- Checkbox row: wireframe toggle. -->
+              <input id="dbg-wireframe" type="checkbox" disabled /> <!-- Enabled only when the model has meshes. -->
+              <span>Wireframe</span> <!-- Wireframe label text. -->
+            </label> <!-- End wireframe row. -->
+          </section> <!-- End Debug panel. -->
+        </aside> <!-- End sidebar. -->
 
-        <main class="viewport">
-          <canvas id="c"></canvas>
-        </main>
-      </div>
-    </div>
-    <script type="module" src="/src/main.ts"></script>
-  </body>
-</html>
+        <main class="viewport"> <!-- Main 3D viewport area. -->
+          <canvas id="c"></canvas> <!-- Canvas where Three.js renders the scene. -->
+        </main> <!-- End viewport. -->
+      </div> <!-- End main layout. -->
+    </div> <!-- End #app wrapper. -->
+
+    <script type="module" src="/src/main.ts"></script> <!-- Load the TypeScript entrypoint as an ES module (handled by Vite). -->
+  </body> <!-- End body. -->
+</html> <!-- End document. -->
