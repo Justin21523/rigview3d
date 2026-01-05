@@ -1,5 +1,6 @@
 import "./style.css";
 import { Helpers } from "./core/helpers";
+import { ModelLoader } from "./core/loader";
 import { Viewer } from "./core/viewer";
 import { initControls } from "./ui/controls";
 
@@ -10,4 +11,5 @@ const viewer = new Viewer(canvas);
 new Helpers(viewer.getScene());
 viewer.start();
 
-initControls({ viewer });
+const loader = new ModelLoader();
+initControls({ viewer, loader });

@@ -99,10 +99,34 @@ export class Viewer {
     this.controls.update();
   }
 
+  public frameObject(object: THREE.Object3D, padding = 1.2): void {
+    const box = new THREE.Box3().setFromObject(object);
+    const size = box.getSize(new THREE.Vector3());
+    const center = box.getCenter(new THREE.Vector3());
+
+    if (!Number.isFinite(size.x + size.y + size.z)) return;
+    if (size.lengthSq() === 0) return;
+
+    const maxDim = Math.max(size.x, size.y, size.z);
+    const fov = THREE.MathUtils.degToRad(this.camera.fov);
+    const distance = (maxDim / 2 / Math.tan(fov / 2)) * padding;
+
+    const dir = new THREE.Vector3()
+      .subVectors(this.defaultCamPos, this.defaultTarget)
+      .normalize();
+
+    this.controls.target.copy(center);
+    this.camera.position.copy(center).addScaledVector(dir, distance);
+
+    this.camera.near = Math.max(distance / 100, 0.001);
+    this.camera.far = Math.max(distance * 100, 50);
+    this.camera.updateProjectionMatrix();
+    this.controls.update();
+  }
+
   public dispose(): void {
     this.stop();
     this.controls.dispose();
     this.renderer.dispose();
   }
 }
-

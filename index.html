@@ -11,9 +11,53 @@
         <div class="brand">RigView3D</div>
         <button id="btn-reset-camera" class="btn">Reset Camera</button>
       </header>
-      <main class="viewport">
-        <canvas id="c"></canvas>
-      </main>
+      <div class="main">
+        <aside class="sidebar">
+          <section class="panel">
+            <h2 class="panel-title">Load</h2>
+            <div
+              id="dropzone"
+              class="dropzone"
+              role="button"
+              tabindex="0"
+              aria-label="Drop GLB/GLTF files here or click to select"
+            >
+              <div class="dropzone-title">Drop a .glb/.gltf here</div>
+              <div class="dropzone-subtitle">or click to browse</div>
+              <div class="dropzone-hint">
+                For .gltf, drop the .gltf + .bin + textures together.
+              </div>
+            </div>
+            <input
+              id="file-input"
+              type="file"
+              hidden
+              multiple
+              accept=".glb,.gltf,.bin,.png,.jpg,.jpeg,.webp"
+            />
+          </section>
+
+          <section class="panel">
+            <h2 class="panel-title">Info</h2>
+            <dl class="info-grid">
+              <dt>File</dt>
+              <dd id="info-file">—</dd>
+              <dt>Meshes</dt>
+              <dd id="info-meshes">—</dd>
+              <dt>Materials</dt>
+              <dd id="info-materials">—</dd>
+              <dt>Bones</dt>
+              <dd id="info-bones">—</dd>
+              <dt>Clips</dt>
+              <dd id="info-clips">—</dd>
+            </dl>
+          </section>
+        </aside>
+
+        <main class="viewport">
+          <canvas id="c"></canvas>
+        </main>
+      </div>
     </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
