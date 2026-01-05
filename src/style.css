@@ -47,15 +47,22 @@ html, body { /* Make the page fill the viewport and match the app's dark theme. 
 
 .main { /* Main content area: sidebar + 3D viewport. */
   display: grid; /* Grid makes a fixed-width sidebar and fluid viewport easy. */
-  grid-template-columns: 340px 1fr; /* Sidebar fixed width, viewport fills remaining space. */
+  grid-template-columns: 340px 1fr 360px; /* Left sidebar, viewport, and right sidebar (editor panels). */
   min-height: 0; /* Allow children to shrink/scroll properly within a grid container. */
 } /* End .main layout. */
 
 .sidebar { /* Left panel column containing controls and info. */
-  border-right: 1px solid rgba(255, 255, 255, 0.08); /* Visual separation from the 3D viewport. */
   padding: 12px; /* Inner spacing around panels. */
   overflow: auto; /* Allow sidebar to scroll if content exceeds height. */
 } /* End .sidebar styles. */
+
+.sidebar-left { /* Left sidebar gets a divider on its right edge. */
+  border-right: 1px solid rgba(255, 255, 255, 0.08); /* Separate left panels from the viewport. */
+} /* End .sidebar-left. */
+
+.sidebar-right { /* Right sidebar gets a divider on its left edge. */
+  border-left: 1px solid rgba(255, 255, 255, 0.08); /* Separate the viewport from right panels. */
+} /* End .sidebar-right. */
 
 .panel { /* Reusable panel card style in sidebar. */
   background: rgba(255, 255, 255, 0.04); /* Slightly tinted background to stand out from page. */
@@ -131,7 +138,7 @@ html, body { /* Make the page fill the viewport and match the app's dark theme. 
 
 .field { /* A row containing a label and an input/control. */
   display: grid; /* Use grid to align label and value/control. */
-  grid-template-columns: 1fr auto; /* Label grows, control stays compact. */
+  grid-template-columns: 110px 1fr auto; /* Fixed label, flexible control, optional value/unit column. */
   align-items: center; /* Vertically center within the row. */
   gap: 10px; /* Space between label and control/value. */
   margin-top: 10px; /* Vertical spacing between fields. */
@@ -161,13 +168,119 @@ html, body { /* Make the page fill the viewport and match the app's dark theme. 
 
 .select { /* Styling for `<select>` elements in dark UI. */
   width: 100%; /* Allow select to fill available horizontal space. */
-  max-width: 190px; /* Keep select from becoming too wide in the sidebar. */
   background: rgba(255, 255, 255, 0.06); /* Dark UI background tint. */
   color: #e6e6e6; /* Light text color. */
   border: 1px solid rgba(255, 255, 255, 0.12); /* Subtle border. */
   border-radius: 10px; /* Rounded corners. */
   padding: 7px 10px; /* Internal padding for readable text. */
 } /* End .select. */
+
+.text-input { /* Base style for `<input type="text">` controls. */
+  width: 100%; /* Make text inputs fill their grid column. */
+  background: rgba(255, 255, 255, 0.06); /* Match the dark UI control background. */
+  color: #e6e6e6; /* Ensure text is readable on dark background. */
+  border: 1px solid rgba(255, 255, 255, 0.12); /* Subtle border to define the control. */
+  border-radius: 10px; /* Rounded corners for a modern look. */
+  padding: 7px 10px; /* Comfortable padding for typing. */
+  outline: none; /* Remove default outline so we can provide a consistent focus ring. */
+} /* End .text-input. */
+
+.number-input { /* Base style for `<input type="number">` controls. */
+  width: 100%; /* Let number inputs fill their column (useful for transform grids). */
+  background: rgba(255, 255, 255, 0.06); /* Same background tint as other controls. */
+  color: #e6e6e6; /* Light text color. */
+  border: 1px solid rgba(255, 255, 255, 0.12); /* Subtle border. */
+  border-radius: 10px; /* Rounded corners. */
+  padding: 7px 10px; /* Match select/text input padding for consistency. */
+  outline: none; /* Remove default outline; we provide focus styles below. */
+} /* End .number-input. */
+
+.text-input:focus, .number-input:focus, .select:focus { /* Shared focus ring for form controls. */
+  border-color: rgba(122, 162, 247, 0.9); /* Use the same accent color as the dropzone focus. */
+  box-shadow: 0 0 0 3px rgba(122, 162, 247, 0.25); /* Add an accessible focus halo. */
+} /* End shared focus styles. */
+
+.muted { /* Utility class for secondary/help text. */
+  color: rgba(255, 255, 255, 0.65); /* Muted color for less prominent text. */
+  font-size: 13px; /* Keep it compact so it doesn't dominate panels. */
+  line-height: 1.35; /* Slightly taller line height for readability. */
+} /* End .muted. */
+
+.subhead { /* Subheading used inside the Inspector panel. */
+  margin: 12px 0 6px; /* Space above and below the subheading. */
+  font-size: 12px; /* Compact heading size. */
+  letter-spacing: 0.1em; /* Small tracking to mimic label-like headings. */
+  text-transform: uppercase; /* Make it look like a section label. */
+  color: rgba(255, 255, 255, 0.75); /* Match panel title tone but slightly lighter. */
+} /* End .subhead. */
+
+.transform-grid { /* Layout wrapper for position/rotation/scale rows. */
+  display: grid; /* Use grid so rows can align consistently. */
+  gap: 8px; /* Space between transform rows. */
+  margin-top: 6px; /* Slight spacing under the subhead. */
+} /* End .transform-grid. */
+
+.transform-row { /* One row in the transform grid. */
+  display: grid; /* Grid for label + XYZ inputs. */
+  grid-template-columns: 90px 1fr 1fr 1fr; /* Label column + three numeric inputs. */
+  gap: 6px; /* Tight spacing between XYZ fields. */
+  align-items: center; /* Align inputs vertically. */
+} /* End .transform-row. */
+
+.transform-label { /* Left label cell in a transform row. */
+  color: rgba(255, 255, 255, 0.7); /* Muted label color for consistency with other labels. */
+  font-size: 13px; /* Match other form label sizes. */
+} /* End .transform-label. */
+
+.tree { /* Simple hierarchy tree container. */
+  margin-top: 10px; /* Space below the search box. */
+  display: grid; /* Stack tree items as a vertical list. */
+  gap: 4px; /* Small gaps between rows for readability. */
+} /* End .tree. */
+
+.tree-item { /* One selectable row in the hierarchy list. */
+  padding: 6px 8px; /* Clickable area padding. */
+  border-radius: 10px; /* Rounded row corners. */
+  border: 1px solid rgba(255, 255, 255, 0.08); /* Subtle border so rows are distinguishable. */
+  background: rgba(255, 255, 255, 0.03); /* Slight fill so rows read as interactive. */
+  cursor: pointer; /* Indicate clickability. */
+  user-select: none; /* Prevent text selection when clicking quickly. */
+  overflow: hidden; /* Keep long names from breaking the layout. */
+  text-overflow: ellipsis; /* Show ellipsis when names are too long. */
+  white-space: nowrap; /* Keep names on one line. */
+} /* End .tree-item. */
+
+.tree-item:hover { /* Hover feedback for hierarchy items. */
+  background: rgba(255, 255, 255, 0.06); /* Slightly brighter on hover. */
+} /* End .tree-item:hover. */
+
+.tree-item.is-selected { /* Selected hierarchy row styling. */
+  border-color: rgba(122, 162, 247, 0.9); /* Accent border matches focus color. */
+  background: rgba(122, 162, 247, 0.12); /* Soft accent fill. */
+} /* End .tree-item.is-selected. */
+
+.btn.is-active { /* Active state for tool buttons (Select/Move/Rotate/Scale). */
+  border-color: rgba(122, 162, 247, 0.9); /* Match the app accent color. */
+  background: rgba(122, 162, 247, 0.18); /* Filled background to show selection. */
+} /* End .btn.is-active. */
+
+.shortcut-list { /* Layout for the shortcuts reference list. */
+  display: grid; /* Stack shortcuts vertically. */
+  gap: 8px; /* Space between shortcut lines. */
+  margin-top: 8px; /* Space below the panel title. */
+  font-size: 13px; /* Keep shortcuts readable but compact. */
+  color: rgba(255, 255, 255, 0.85); /* Slightly brighter text for readability. */
+} /* End .shortcut-list. */
+
+.kbd { /* Small "key cap" pill used to display keyboard shortcuts. */
+  display: inline-block; /* Allow padding and borders around inline text. */
+  padding: 2px 6px; /* Compact padding so it looks like a key. */
+  border-radius: 6px; /* Rounded corners like a keyboard key. */
+  border: 1px solid rgba(255, 255, 255, 0.18); /* Subtle border. */
+  background: rgba(255, 255, 255, 0.06); /* Slight fill to separate from text. */
+  font-variant-numeric: tabular-nums; /* Keep digits aligned nicely. */
+  margin-right: 4px; /* Small spacing when chaining multiple key caps (e.g., Ctrl+Z). */
+} /* End .kbd. */
 
 .range { /* Range input should fill the field width. */
   width: 100%; /* Make slider full width for easier control. */

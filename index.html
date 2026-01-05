@@ -12,8 +12,8 @@
         <button id="btn-reset-camera" class="btn">Reset Camera</button> <!-- Button wired in TS to reset orbit camera. -->
       </header> <!-- End topbar. -->
 
-      <div class="main"> <!-- Two-column layout: sidebar (controls) + viewport (canvas). -->
-        <aside class="sidebar"> <!-- Sidebar contains panels with load/info/controls. -->
+      <div class="main"> <!-- Three-column layout: left sidebar + viewport + right sidebar (Unity-like). -->
+        <aside class="sidebar sidebar-left"> <!-- Left sidebar: load/info/hierarchy/animation/debug. -->
           <section class="panel"> <!-- Panel: model loading. -->
             <h2 class="panel-title">Load</h2> <!-- Panel heading. -->
             <div id="dropzone" class="dropzone" role="button" tabindex="0" aria-label="Drop GLB/GLTF files here or click to select"> <!-- Drag-and-drop target + click-to-browse. -->
@@ -39,6 +39,12 @@
               <dd id="info-clips">—</dd> <!-- Value: clip count. -->
             </dl> <!-- End info grid. -->
           </section> <!-- End Info panel. -->
+
+          <section class="panel"> <!-- Panel: hierarchy (scene graph) like Unity Hierarchy. -->
+            <h2 class="panel-title">Hierarchy</h2> <!-- Panel heading. -->
+            <input id="hierarchy-search" class="text-input" type="text" placeholder="Search…" /> <!-- Search filter for the hierarchy list. -->
+            <div id="hierarchy-tree" class="tree" role="tree" aria-label="Scene hierarchy"></div> <!-- Container where we render the model tree. -->
+          </section> <!-- End Hierarchy panel. -->
 
           <section class="panel"> <!-- Panel: animation controls. -->
             <h2 class="panel-title">Animation</h2> <!-- Panel heading. -->
@@ -84,11 +90,171 @@
               <span>Wireframe</span> <!-- Wireframe label text. -->
             </label> <!-- End wireframe row. -->
           </section> <!-- End Debug panel. -->
-        </aside> <!-- End sidebar. -->
+        </aside> <!-- End left sidebar. -->
 
         <main class="viewport"> <!-- Main 3D viewport area. -->
           <canvas id="c"></canvas> <!-- Canvas where Three.js renders the scene. -->
         </main> <!-- End viewport. -->
+
+        <aside class="sidebar sidebar-right"> <!-- Right sidebar: tools + inspector + settings + export. -->
+          <section class="panel"> <!-- Panel: transform tools like Unity toolbar. -->
+            <h2 class="panel-title">Tools</h2> <!-- Panel heading. -->
+
+            <div class="row"> <!-- Button row for gizmo mode selection. -->
+              <button id="tool-select" class="btn btn-small" title="Select (Q)">Select</button> <!-- Disable gizmo (selection only). -->
+              <button id="tool-move" class="btn btn-small" title="Move (W)">Move</button> <!-- Translation gizmo. -->
+              <button id="tool-rotate" class="btn btn-small" title="Rotate (E)">Rotate</button> <!-- Rotation gizmo. -->
+              <button id="tool-scale" class="btn btn-small" title="Scale (R)">Scale</button> <!-- Scale gizmo. -->
+            </div> <!-- End gizmo mode row. -->
+
+            <label class="checkbox"> <!-- Checkbox row: snapping toggle. -->
+              <input id="tool-snap-enabled" type="checkbox" /> <!-- Enables/disables snapping in TransformControls. -->
+              <span>Snap</span> <!-- Snap label. -->
+            </label> <!-- End snap toggle. -->
+
+            <label class="field"> <!-- Field: translate snap step. -->
+              <span class="field-label">Move step</span> <!-- Label for translate snap. -->
+              <input id="tool-snap-move" class="number-input" type="number" min="0" step="0.01" value="0.1" /> <!-- Translation snap size. -->
+            </label> <!-- End move step field. -->
+
+            <label class="field"> <!-- Field: rotate snap step. -->
+              <span class="field-label">Rotate step</span> <!-- Label for rotate snap. -->
+              <input id="tool-snap-rotate" class="number-input" type="number" min="0" step="1" value="15" /> <!-- Rotation snap in degrees. -->
+              <span class="field-value">deg</span> <!-- Unit label. -->
+            </label> <!-- End rotate step field. -->
+
+            <label class="field"> <!-- Field: scale snap step. -->
+              <span class="field-label">Scale step</span> <!-- Label for scale snap. -->
+              <input id="tool-snap-scale" class="number-input" type="number" min="0" step="0.01" value="0.1" /> <!-- Scale snap size. -->
+            </label> <!-- End scale step field. -->
+
+            <label class="field"> <!-- Field: nudge step for keyboard arrow moves. -->
+              <span class="field-label">Nudge step</span> <!-- Label for nudge step. -->
+              <input id="tool-nudge" class="number-input" type="number" min="0" step="0.01" value="0.05" /> <!-- Translation amount per arrow key press. -->
+            </label> <!-- End nudge step field. -->
+
+            <label class="checkbox"> <!-- Checkbox row: local/world toggle. -->
+              <input id="tool-space-local" type="checkbox" checked /> <!-- Checked = local space, unchecked = world space. -->
+              <span>Local space</span> <!-- Local space label. -->
+            </label> <!-- End local/world row. -->
+          </section> <!-- End Tools panel. -->
+
+          <section class="panel"> <!-- Panel: inspector like Unity Inspector. -->
+            <h2 class="panel-title">Inspector</h2> <!-- Panel heading. -->
+            <div id="inspector-empty" class="muted">Select an object to edit its properties.</div> <!-- Empty state when nothing is selected. -->
+            <div id="inspector-content" hidden> <!-- Inspector content shown when selection exists. -->
+              <label class="field"> <!-- Field: object name. -->
+                <span class="field-label">Name</span> <!-- Label for name input. -->
+                <input id="inspector-name" class="text-input" type="text" /> <!-- Editable object name. -->
+              </label> <!-- End name field. -->
+
+              <div class="field"> <!-- Field-like row: object type display (read-only). -->
+                <span class="field-label">Type</span> <!-- Label for type. -->
+                <span id="inspector-type" class="field-value">—</span> <!-- Read-only type string. -->
+              </div> <!-- End type row. -->
+
+              <label class="checkbox"> <!-- Checkbox: object visibility. -->
+                <input id="inspector-visible" type="checkbox" checked /> <!-- Toggle object visibility. -->
+                <span>Visible</span> <!-- Visible label. -->
+              </label> <!-- End visible checkbox. -->
+
+              <h3 class="subhead">Transform</h3> <!-- Subheading for transform group. -->
+
+              <div class="transform-grid"> <!-- Grid for position/rotation/scale numeric inputs. -->
+                <div class="transform-row"> <!-- Row: position. -->
+                  <div class="transform-label">Position</div> <!-- Row label. -->
+                  <input id="inspector-pos-x" class="number-input" type="number" step="0.01" /> <!-- Position X. -->
+                  <input id="inspector-pos-y" class="number-input" type="number" step="0.01" /> <!-- Position Y. -->
+                  <input id="inspector-pos-z" class="number-input" type="number" step="0.01" /> <!-- Position Z. -->
+                </div> <!-- End position row. -->
+
+                <div class="transform-row"> <!-- Row: rotation (degrees). -->
+                  <div class="transform-label">Rotation</div> <!-- Row label. -->
+                  <input id="inspector-rot-x" class="number-input" type="number" step="1" /> <!-- Rotation X (deg). -->
+                  <input id="inspector-rot-y" class="number-input" type="number" step="1" /> <!-- Rotation Y (deg). -->
+                  <input id="inspector-rot-z" class="number-input" type="number" step="1" /> <!-- Rotation Z (deg). -->
+                </div> <!-- End rotation row. -->
+
+                <div class="transform-row"> <!-- Row: scale. -->
+                  <div class="transform-label">Scale</div> <!-- Row label. -->
+                  <input id="inspector-scale-x" class="number-input" type="number" step="0.01" /> <!-- Scale X. -->
+                  <input id="inspector-scale-y" class="number-input" type="number" step="0.01" /> <!-- Scale Y. -->
+                  <input id="inspector-scale-z" class="number-input" type="number" step="0.01" /> <!-- Scale Z. -->
+                </div> <!-- End scale row. -->
+              </div> <!-- End transform grid. -->
+
+              <h3 class="subhead">Material</h3> <!-- Subheading for material group. -->
+              <div id="inspector-material" class="muted">Select a mesh to edit material.</div> <!-- Placeholder text for material inspector. -->
+              <div id="inspector-material-controls" hidden> <!-- Material controls shown for supported materials. -->
+                <label class="field"> <!-- Field: material slot selector for multi-material meshes. -->
+                  <span class="field-label">Slot</span> <!-- Label. -->
+                  <select id="material-slot" class="select"></select> <!-- Select which material index to edit. -->
+                </label> <!-- End slot selector. -->
+
+                <label class="field"> <!-- Field: base color. -->
+                  <span class="field-label">Color</span> <!-- Label. -->
+                  <input id="material-color" type="color" /> <!-- HTML color picker. -->
+                </label> <!-- End color field. -->
+
+                <label class="field"> <!-- Field: metalness. -->
+                  <span class="field-label">Metalness</span> <!-- Label. -->
+                  <input id="material-metalness" class="range" type="range" min="0" max="1" step="0.01" /> <!-- Slider for metalness. -->
+                  <span id="material-metalness-value" class="field-value">0.00</span> <!-- Value label. -->
+                </label> <!-- End metalness field. -->
+
+                <label class="field"> <!-- Field: roughness. -->
+                  <span class="field-label">Roughness</span> <!-- Label. -->
+                  <input id="material-roughness" class="range" type="range" min="0" max="1" step="0.01" /> <!-- Slider for roughness. -->
+                  <span id="material-roughness-value" class="field-value">0.00</span> <!-- Value label. -->
+                </label> <!-- End roughness field. -->
+              </div> <!-- End material controls. -->
+            </div> <!-- End inspector content. -->
+          </section> <!-- End Inspector panel. -->
+
+          <section class="panel"> <!-- Panel: scene settings. -->
+            <h2 class="panel-title">Scene</h2> <!-- Panel heading. -->
+            <label class="field"> <!-- Field: background color. -->
+              <span class="field-label">Background</span> <!-- Label. -->
+              <input id="scene-bg" type="color" value="#0b0e14" /> <!-- Background color picker (updates scene.background). -->
+            </label> <!-- End background field. -->
+
+            <label class="field"> <!-- Field: directional light intensity. -->
+              <span class="field-label">Key light</span> <!-- Label for main light. -->
+              <input id="scene-dir-intensity" class="range" type="range" min="0" max="3" step="0.05" value="1.2" /> <!-- Slider for directional light intensity. -->
+              <span id="scene-dir-intensity-value" class="field-value">1.20</span> <!-- Value label. -->
+            </label> <!-- End key light field. -->
+
+            <label class="field"> <!-- Field: hemisphere light intensity. -->
+              <span class="field-label">Fill light</span> <!-- Label for ambient hemisphere light. -->
+              <input id="scene-hemi-intensity" class="range" type="range" min="0" max="3" step="0.05" value="0.9" /> <!-- Slider for hemisphere light intensity. -->
+              <span id="scene-hemi-intensity-value" class="field-value">0.90</span> <!-- Value label. -->
+            </label> <!-- End fill light field. -->
+          </section> <!-- End Scene panel. -->
+
+          <section class="panel"> <!-- Panel: export. -->
+            <h2 class="panel-title">Export</h2> <!-- Panel heading. -->
+            <label class="checkbox"> <!-- Checkbox: include animations in export. -->
+              <input id="export-animations" type="checkbox" checked /> <!-- Whether to include animation clips in the exported GLB. -->
+              <span>Include animations</span> <!-- Label. -->
+            </label> <!-- End export animations checkbox. -->
+            <button id="btn-export-glb" class="btn">Export GLB</button> <!-- Export button downloads a .glb file. -->
+          </section> <!-- End Export panel. -->
+
+          <section class="panel"> <!-- Panel: keyboard shortcuts help (read-only). -->
+            <h2 class="panel-title">Shortcuts</h2> <!-- Panel heading. -->
+            <div class="shortcut-list"> <!-- Container for shortcut lines. -->
+              <div><span class="kbd">Q</span> Select</div> <!-- Select tool. -->
+              <div><span class="kbd">W</span> Move</div> <!-- Move tool. -->
+              <div><span class="kbd">E</span> Rotate</div> <!-- Rotate tool. -->
+              <div><span class="kbd">R</span> Scale</div> <!-- Scale tool. -->
+              <div><span class="kbd">F</span> Frame selection</div> <!-- Frame selected object. -->
+              <div><span class="kbd">Esc</span> Clear selection</div> <!-- Clear selection. -->
+              <div><span class="kbd">Del</span> Delete selection</div> <!-- Delete selected node. -->
+              <div><span class="kbd">Ctrl</span>+<span class="kbd">Z</span> Undo</div> <!-- Undo. -->
+              <div><span class="kbd">Ctrl</span>+<span class="kbd">Y</span> Redo</div> <!-- Redo. -->
+            </div> <!-- End shortcut list. -->
+          </section> <!-- End Shortcuts panel. -->
+        </aside> <!-- End right sidebar. -->
       </div> <!-- End main layout. -->
     </div> <!-- End #app wrapper. -->
 
