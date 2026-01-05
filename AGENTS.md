@@ -5,8 +5,15 @@ RigView3D is a small front-end app (TypeScript + Three.js) intended to be served
 
 - `index.html`: app shell (loads `src/main.ts` as an ES module)
 - `src/main.ts`: bootstrap (wires core + UI)
-- `src/ui/controls.ts`: DOM wiring (drag/drop, buttons, toggles)
-- `src/core/`: rendering and scene logic (`viewer.ts`, `loader.ts`, `animator.ts`, `helpers.ts`, `dispose.ts`)
+- `src/ui/controls.ts`: DOM wiring for loading/animation/debug panels
+- `src/ui/editor.ts`: Hierarchy panel + viewport click-to-select
+- `src/ui/tools.ts`: Tools panel (Select/Move/Rotate/Scale, snapping, local/world)
+- `src/ui/inspector.ts`: Inspector panel (name/visible/transform/material)
+- `src/ui/scene.ts`: Scene panel (background + light intensities)
+- `src/ui/export.ts`: Export panel (GLB download)
+- `src/ui/shortcuts.ts`: keyboard shortcuts (Q/W/E/R, F, Del, undo/redo)
+- `src/core/`: rendering and runtime logic (`viewer.ts`, `loader.ts`, `animator.ts`, `helpers.ts`, `dispose.ts`)
+- `src/core/editor/`: editor runtime (selection, TransformControls, history, snapshots)
 - `src/style.css`: global UI styles
 - `docs/implementation/`: step-by-step implementation notes (Chinese) for beginners
 - `project-description.md`: product/architecture notes and roadmap

@@ -18,6 +18,14 @@
 10. `09-cleanup-dispose.md`：`src/core/dispose.ts`（為什麼要 dispose、怎麼避免 GPU leak）
 11. `10-git-phases.md`：如何切換到每個 phase 的 git tag 來看「中間狀態」
 12. `11-next-steps.md`：你可以自己改什麼來練習（循序漸進）
+13. `12-editor-overview.md`：Editor 模式總覽（Hierarchy/Inspector/Tools）
+14. `13-selection-hierarchy.md`：selection 的 raycast 原理 + Hierarchy 如何渲染
+15. `14-transform-controls.md`：TransformControls（Move/Rotate/Scale gizmo）
+16. `15-inspector-transform-material.md`：Inspector（Transform + Material）
+17. `16-undo-redo-history.md`：Undo/Redo（history + snapshot）
+18. `17-shortcuts.md`：快捷鍵（Q/W/E/R、F、Del、Ctrl+Z/Y）
+19. `18-export-glb.md`：匯出 GLB（GLTFExporter）
+20. `19-delete-and-safety.md`：Delete 的取捨與資源管理注意事項
 
 ## 如何對照程式碼
 建議你開兩個視窗：
@@ -25,10 +33,16 @@
 2. 同時打開這裡的文件，邊看概念邊對照程式碼註解（英文）
 
 ## 如何切換到每個 Phase 的中間狀態
-這個 repo 有標記 git tag：`phase-1` 到 `phase-5`。你可以用：
+這個 repo 有標記 git tag：
+
+- Viewer phases：`phase-1` 到 `phase-5`
+- Editor phases：`editor-phase-1` 開始（逐步把 viewer 變成 Unity-like editor）
+
+你可以用：
 
 ```bash
 git tag --list "phase-*"
+git tag --list "editor-phase-*"
 git switch --detach phase-1
 npm install
 npm run dev
@@ -39,4 +53,3 @@ npm run dev
 ```bash
 git switch main
 ```
-

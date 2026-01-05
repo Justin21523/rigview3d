@@ -1,4 +1,4 @@
-# 10 — 用 git tags 看「中間過程」（phase-1 ~ phase-5）
+# 10 — 用 git tags 看「中間過程」（phase-* / editor-phase-*）
 
 你說你希望能看到「一步一步做出來」的過程，所以 repo 有提供 tags：
 
@@ -8,10 +8,18 @@
 - `phase-4`：debug helpers（grid/axes/skeleton/wireframe toggles）
 - `phase-5`：重複載入模型的資源釋放（dispose）
 
+另外也有 Editor（Unity-like）進度 tags：
+
+- `editor-phase-1`：三欄式 UI 版面（左右面板 + viewport）
+- `editor-phase-2`：Selection + Hierarchy（raycast picking + 場景樹列表）
+- `editor-phase-3`：TransformControls + Inspector + Scene 面板
+- `editor-phase-4`：Shortcuts + Undo/Redo + Export GLB（含 delete 可復原）
+
 ## 查詢 tags
 
 ```bash
 git tag --list "phase-*"
+git tag --list "editor-phase-*"
 ```
 
 ## 切換到某個 phase
@@ -39,4 +47,3 @@ git switch main
 5. `phase-5` 看 dispose
 
 每一階段都跑一次 `npm run dev`，你會很快建立「改哪裡會影響哪裡」的直覺。
-
