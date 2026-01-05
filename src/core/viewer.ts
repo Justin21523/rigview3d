@@ -133,6 +133,13 @@ export class Viewer {
     this.onTick = callback;
   }
 
+  public disposeRenderLists(): void {
+    const renderLists = (
+      this.renderer as unknown as { renderLists?: { dispose?: () => void } }
+    ).renderLists;
+    renderLists?.dispose?.();
+  }
+
   public dispose(): void {
     this.stop();
     this.controls.dispose();

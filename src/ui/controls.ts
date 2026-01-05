@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import type { Animator } from "../core/animator";
+import { disposeObject3D } from "../core/dispose";
 import type { Helpers } from "../core/helpers";
 import type { ModelLoader } from "../core/loader";
 import type { Viewer } from "../core/viewer";
@@ -53,9 +54,8 @@ export function initControls({
       infoFile.textContent = "Loading…";
       const result = await loader.loadFromFiles(files);
 
-      if (currentModelRoot) {
-        viewer.getScene().remove(currentModelRoot);
-      }
+      const previousRoot = currentModelRoot;
+      if (previousRoot) viewer.getScene().remove(previousRoot);
 
       currentModelRoot = result.root;
       viewer.getScene().add(currentModelRoot);
@@ -92,6 +92,11 @@ export function initControls({
       helpers.setAxesVisible(axesCheckbox.checked);
       helpers.setSkeletonVisible(skeletonCheckbox.checked);
       helpers.setWireframeEnabled(wireframeCheckbox.checked);
+
+      if (previousRoot) {
+        disposeObject3D(previousRoot);
+        viewer.disposeRenderLists();
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       console.error(err);
