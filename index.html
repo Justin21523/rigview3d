@@ -52,6 +52,41 @@
               <dd id="info-clips">—</dd>
             </dl>
           </section>
+
+          <section class="panel">
+            <h2 class="panel-title">Animation</h2>
+
+            <label class="field">
+              <span class="field-label">Clip</span>
+              <select id="anim-clip" class="select" disabled></select>
+            </label>
+
+            <div class="row">
+              <button id="anim-play" class="btn btn-small" disabled>Play</button>
+              <button id="anim-pause" class="btn btn-small" disabled>Pause</button>
+              <button id="anim-stop" class="btn btn-small" disabled>Stop</button>
+            </div>
+
+            <label class="field">
+              <span class="field-label">Speed</span>
+              <input
+                id="anim-speed"
+                class="range"
+                type="range"
+                min="0.25"
+                max="2"
+                step="0.05"
+                value="1"
+                disabled
+              />
+              <span id="anim-speed-value" class="field-value">1.00x</span>
+            </label>
+
+            <label class="checkbox">
+              <input id="anim-loop" type="checkbox" checked disabled />
+              <span>Loop</span>
+            </label>
+          </section>
         </aside>
 
         <main class="viewport">

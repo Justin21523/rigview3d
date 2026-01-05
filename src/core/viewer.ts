@@ -10,6 +10,8 @@ export class Viewer {
   private controls!: OrbitControls;
 
   private rafId: number | null = null;
+  private readonly clock = new THREE.Clock();
+  private onTick: ((deltaSeconds: number) => void) | null = null;
 
   // Defaults
   private readonly defaultTarget = new THREE.Vector3(0, 1, 0);
@@ -76,8 +78,11 @@ export class Viewer {
 
   public start(): void {
     if (this.rafId !== null) return;
+    this.clock.start();
 
     const tick = () => {
+      const deltaSeconds = this.clock.getDelta();
+      this.onTick?.(deltaSeconds);
       this.controls.update();
       this.renderer.render(this.scene, this.camera);
       this.rafId = window.requestAnimationFrame(tick);
@@ -122,6 +127,10 @@ export class Viewer {
     this.camera.far = Math.max(distance * 100, 50);
     this.camera.updateProjectionMatrix();
     this.controls.update();
+  }
+
+  public setOnTick(callback: ((deltaSeconds: number) => void) | null): void {
+    this.onTick = callback;
   }
 
   public dispose(): void {

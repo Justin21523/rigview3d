@@ -1,4 +1,5 @@
 import "./style.css";
+import { Animator } from "./core/animator";
 import { Helpers } from "./core/helpers";
 import { ModelLoader } from "./core/loader";
 import { Viewer } from "./core/viewer";
@@ -9,7 +10,9 @@ if (!canvas) throw new Error("Canvas element not found.");
 
 const viewer = new Viewer(canvas);
 new Helpers(viewer.getScene());
+const animator = new Animator();
+viewer.setOnTick((deltaSeconds) => animator.update(deltaSeconds));
 viewer.start();
 
 const loader = new ModelLoader();
-initControls({ viewer, loader });
+initControls({ viewer, loader, animator });
