@@ -9,10 +9,13 @@ const canvas = document.getElementById("c") as HTMLCanvasElement | null;
 if (!canvas) throw new Error("Canvas element not found.");
 
 const viewer = new Viewer(canvas);
-new Helpers(viewer.getScene());
+const helpers = new Helpers(viewer.getScene());
 const animator = new Animator();
-viewer.setOnTick((deltaSeconds) => animator.update(deltaSeconds));
+viewer.setOnTick((deltaSeconds) => {
+  animator.update(deltaSeconds);
+  helpers.update();
+});
 viewer.start();
 
 const loader = new ModelLoader();
-initControls({ viewer, loader, animator });
+initControls({ viewer, loader, animator, helpers });

@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import type { Animator } from "../core/animator";
+import type { Helpers } from "../core/helpers";
 import type { ModelLoader } from "../core/loader";
 import type { Viewer } from "../core/viewer";
 
@@ -7,10 +8,12 @@ export function initControls({
   viewer,
   loader,
   animator,
+  helpers,
 }: {
   viewer: Viewer;
   loader: ModelLoader;
   animator: Animator;
+  helpers: Helpers;
 }): void {
   const resetButton = document.getElementById("btn-reset-camera");
   resetButton?.addEventListener("click", () => viewer.resetCamera());
@@ -31,6 +34,11 @@ export function initControls({
   const speedInput = mustGetEl("anim-speed") as HTMLInputElement;
   const speedValue = mustGetEl("anim-speed-value");
   const loopCheckbox = mustGetEl("anim-loop") as HTMLInputElement;
+
+  const gridCheckbox = mustGetEl("dbg-grid") as HTMLInputElement;
+  const axesCheckbox = mustGetEl("dbg-axes") as HTMLInputElement;
+  const skeletonCheckbox = mustGetEl("dbg-skeleton") as HTMLInputElement;
+  const wireframeCheckbox = mustGetEl("dbg-wireframe") as HTMLInputElement;
 
   let currentModelRoot: THREE.Object3D | null = null;
 
@@ -53,6 +61,8 @@ export function initControls({
       viewer.getScene().add(currentModelRoot);
       viewer.frameObject(currentModelRoot);
 
+      helpers.setModelRoot(currentModelRoot);
+
       animator.setSource(result.root, result.animations);
       rebuildClipOptions(animator.getClips(), clipSelect);
       syncAnimUi(animator, {
@@ -71,6 +81,17 @@ export function initControls({
       infoMaterials.textContent = String(stats.materials);
       infoBones.textContent = String(stats.bones);
       infoClips.textContent = String(stats.clips);
+
+      skeletonCheckbox.disabled = !stats.hasSkinnedMesh;
+      if (!stats.hasSkinnedMesh) skeletonCheckbox.checked = false;
+
+      wireframeCheckbox.disabled = stats.meshes === 0;
+      if (stats.meshes === 0) wireframeCheckbox.checked = false;
+
+      helpers.setGridVisible(gridCheckbox.checked);
+      helpers.setAxesVisible(axesCheckbox.checked);
+      helpers.setSkeletonVisible(skeletonCheckbox.checked);
+      helpers.setWireframeEnabled(wireframeCheckbox.checked);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       console.error(err);
@@ -91,6 +112,12 @@ export function initControls({
         speedValue,
         loopCheckbox,
       });
+
+      helpers.setModelRoot(null);
+      skeletonCheckbox.checked = false;
+      wireframeCheckbox.checked = false;
+      skeletonCheckbox.disabled = true;
+      wireframeCheckbox.disabled = true;
     }
   };
 
@@ -203,6 +230,19 @@ export function initControls({
     });
   });
 
+  gridCheckbox.addEventListener("change", () =>
+    helpers.setGridVisible(gridCheckbox.checked),
+  );
+  axesCheckbox.addEventListener("change", () =>
+    helpers.setAxesVisible(axesCheckbox.checked),
+  );
+  skeletonCheckbox.addEventListener("change", () =>
+    helpers.setSkeletonVisible(skeletonCheckbox.checked),
+  );
+  wireframeCheckbox.addEventListener("change", () =>
+    helpers.setWireframeEnabled(wireframeCheckbox.checked),
+  );
+
   rebuildClipOptions([], clipSelect);
   syncAnimUi(animator, {
     clipSelect,
@@ -213,6 +253,13 @@ export function initControls({
     speedValue,
     loopCheckbox,
   });
+
+  helpers.setGridVisible(true);
+  helpers.setAxesVisible(true);
+  skeletonCheckbox.checked = false;
+  wireframeCheckbox.checked = false;
+  skeletonCheckbox.disabled = true;
+  wireframeCheckbox.disabled = true;
 }
 
 function mustGetEl(id: string): HTMLElement {
@@ -224,9 +271,16 @@ function mustGetEl(id: string): HTMLElement {
 function getModelStats(
   root: THREE.Object3D,
   clips: THREE.AnimationClip[],
-): { meshes: number; materials: number; bones: number; clips: number } {
+): {
+  meshes: number;
+  materials: number;
+  bones: number;
+  clips: number;
+  hasSkinnedMesh: boolean;
+} {
   let meshes = 0;
   let bones = 0;
+  let hasSkinnedMesh = false;
   const materialSet = new Set<THREE.Material>();
 
   root.traverse((obj) => {
@@ -238,6 +292,7 @@ function getModelStats(
       else if (mat) materialSet.add(mat);
     }
     if ((obj as THREE.Bone).isBone) bones += 1;
+    if ((obj as THREE.SkinnedMesh).isSkinnedMesh) hasSkinnedMesh = true;
   });
 
   return {
@@ -245,6 +300,7 @@ function getModelStats(
     materials: materialSet.size,
     bones,
     clips: clips.length,
+    hasSkinnedMesh,
   };
 }
 
