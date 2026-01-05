@@ -3,7 +3,7 @@
 // Its job is to construct the core building blocks (viewer/loader/animator/helpers)
 // and then connect them to the DOM UI wiring layer (`src/ui/controls.ts`).
 
-import "./style.css"; // Import global CSS so Vite bundles it into the page.
+	// Note: Global CSS is loaded from `index.html` via a `<link>` tag (so the UI is styled even if JS fails early).
 import { Animator } from "./core/animator"; // Import the animation controller (AnimationMixer wrapper).
 import { Editor } from "./core/editor/editor"; // Import the editor system (selection now; gizmos/undo/export later).
 import { Helpers } from "./core/helpers"; // Import debug helpers (grid/axes/skeleton/wireframe).
