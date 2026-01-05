@@ -36,6 +36,21 @@ export class Viewer {
     return this.scene; // Return the internal scene reference owned by the Viewer.
   }
 
+  public getCamera(): THREE.PerspectiveCamera {
+    // Provide access to the active camera (needed for picking and gizmos).
+    return this.camera; // Return the camera owned by Viewer (callers should not replace it).
+  }
+
+  public getDomElement(): HTMLCanvasElement {
+    // Provide the renderer DOM element for controls that need mouse/touch events.
+    return this.renderer.domElement; // WebGLRenderer always renders into a canvas element.
+  }
+
+  public setOrbitEnabled(enabled: boolean): void {
+    // Enable/disable OrbitControls (useful while dragging transform gizmos).
+    this.controls.enabled = enabled; // OrbitControls checks this flag before responding to input.
+  }
+
   private init(): void {
     // Initialize all Three.js objects owned by Viewer.
     this.scene = new THREE.Scene(); // Create a new Scene (a container for objects).

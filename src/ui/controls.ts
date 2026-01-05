@@ -9,6 +9,7 @@
 
 import * as THREE from "three"; // Import Three.js types for runtime checks and traversal helpers.
 import type { Animator } from "../core/animator"; // Import Animator type (runtime code lives in core/animator.ts).
+import type { Editor } from "../core/editor/editor"; // Import Editor type (selection + hierarchy root state).
 import { disposeObject3D } from "../core/dispose"; // Import disposal utility to prevent GPU memory leaks on reload.
 import type { Helpers } from "../core/helpers"; // Import Helpers type for debug toggles (grid/axes/skeleton/wireframe).
 import type { ModelLoader } from "../core/loader"; // Import ModelLoader type (handles .glb/.gltf local loading).
@@ -20,11 +21,13 @@ export function initControls({
   loader, // The ModelLoader instance (used to load GLB/GLTF from dropped files).
   animator, // The Animator instance (used to manage clips and playback).
   helpers, // The Helpers instance (used to toggle debug helpers).
+  editor, // The Editor instance (selection + hierarchy root state).
 }: {
   viewer: Viewer; // Type annotation for viewer.
   loader: ModelLoader; // Type annotation for loader.
   animator: Animator; // Type annotation for animator.
   helpers: Helpers; // Type annotation for helpers.
+  editor: Editor; // Type annotation for editor.
 }): void {
   const resetButton = document.getElementById("btn-reset-camera"); // Find the reset camera button in the top bar.
   resetButton?.addEventListener("click", () => viewer.resetCamera()); // Reset camera when clicked (safe with optional chaining).
@@ -62,17 +65,27 @@ export function initControls({
     // Main workflow: load dropped/selected files and update scene + UI.
     if (files.length === 0) return; // Ignore empty drops/selections.
 
+    const previousRoot = currentModelRoot; // Snapshot currently loaded model (if any) so we can keep it on load failure.
+    const previousInfo = {
+      // Snapshot Info panel values so we can restore them if loading fails.
+      file: infoFile.textContent ?? "—", // Previous file label.
+      meshes: infoMeshes.textContent ?? "—", // Previous mesh count.
+      materials: infoMaterials.textContent ?? "—", // Previous material count.
+      bones: infoBones.textContent ?? "—", // Previous bone count.
+      clips: infoClips.textContent ?? "—", // Previous clip count.
+    }; // End snapshot object.
+
     try {
       infoFile.textContent = "Loading…"; // Give the user feedback immediately.
       const result = await loader.loadFromFiles(files); // Load the model using ModelLoader (handles .gltf dependencies).
 
-      const previousRoot = currentModelRoot; // Snapshot the previous model root for cleanup.
       if (previousRoot) viewer.getScene().remove(previousRoot); // Remove previous model from the scene graph first (stops rendering it).
 
       currentModelRoot = result.root; // Store the new model root.
       viewer.getScene().add(currentModelRoot); // Add the new model to the scene so it renders.
       viewer.frameObject(currentModelRoot); // Auto-frame the model so it fits in the viewport.
 
+      editor.setModelRoot(currentModelRoot); // Tell the editor about the new active model so hierarchy/selection stay in sync.
       helpers.setModelRoot(currentModelRoot); // Tell helpers about the new model (skeleton/wireframe operate on the active root).
 
       animator.setSource(result.root, result.animations); // Bind animation mixer to the new model and its clips.
@@ -115,6 +128,17 @@ export function initControls({
       // Handle errors gracefully and reset UI state.
       const message = err instanceof Error ? err.message : String(err); // Normalize error to a string message.
       console.error(err); // Log the full error for debugging.
+
+      if (previousRoot) {
+        // If we already had a model loaded, keep it and just restore UI (Unity-like behavior).
+        infoFile.textContent = `${previousInfo.file} (Load error: ${message})`; // Show error while keeping the previous filename visible.
+        infoMeshes.textContent = previousInfo.meshes; // Restore mesh count.
+        infoMaterials.textContent = previousInfo.materials; // Restore material count.
+        infoBones.textContent = previousInfo.bones; // Restore bone count.
+        infoClips.textContent = previousInfo.clips; // Restore clip count.
+        return; // Do not reset core state since the previous model is still active.
+      }
+
       infoFile.textContent = `Error: ${message}`; // Display a readable error in the Info panel.
       infoMeshes.textContent = "—"; // Reset meshes display.
       infoMaterials.textContent = "—"; // Reset materials display.
@@ -135,6 +159,7 @@ export function initControls({
       }); // End sync call.
 
       helpers.setModelRoot(null); // Clear model binding for helpers (removes skeleton helper, etc.).
+      editor.setModelRoot(null); // Clear editor root so hierarchy/selection reset to empty state.
       skeletonCheckbox.checked = false; // Reset skeleton checkbox.
       wireframeCheckbox.checked = false; // Reset wireframe checkbox.
       skeletonCheckbox.disabled = true; // Disable skeleton toggle until a valid skinned model is loaded.
