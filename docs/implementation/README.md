@@ -34,6 +34,7 @@
 26. `25-editor-multi-selection-pivot-axis.md`：Editor phase-10（多選 / 群組 gizmo / Pivot-Center / X-Y-Z 軸鎖）
 27. `26-animation-timeline.md`：Editor phase-11（timeline scrub / range / crossfade）
 28. `27-hierarchy-usability.md`：Editor phase-12（Hierarchy filters / 展開狀態保存 / 效能）
+29. `28-export-formats-and-naming.md`：Editor phase-13（GLB/glTF 匯出 + 檔名 overwrite + onlyVisible）
 
 ## 如何對照程式碼
 建議你開兩個視窗：

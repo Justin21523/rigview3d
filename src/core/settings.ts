@@ -51,12 +51,22 @@ export type HierarchySettings = {
   expandedByAsset: Record<string, string[]>; // Persisted expand/collapse state keyed by source filename.
 };
 
+export type ExportFormatSetting = "glb" | "gltf"; // Export formats supported by the in-browser exporter.
+
+export type ExportSettings = {
+  format: ExportFormatSetting; // Output format (GLB or glTF).
+  includeAnimations: boolean; // Whether to include animation clips in export.
+  onlyVisible: boolean; // When true, export excludes hidden nodes (GLTFExporter.onlyVisible).
+  overwriteName: boolean; // When true, use the original filename instead of adding "-edited".
+};
+
 export type AppSettingsV1 = {
   version: 1; // Schema version. Increment when the shape changes.
   tools: ToolsSettings; // Tools panel preferences.
   scene: SceneSettings; // Scene panel preferences.
   debug: DebugSettings; // Debug panel preferences.
   hierarchy: HierarchySettings; // Hierarchy panel preferences.
+  export: ExportSettings; // Export panel preferences.
 };
 
 const STORAGE_KEY = "rigview3d.settings"; // Single localStorage key for the whole app (easy to version/migrate).
@@ -96,6 +106,12 @@ const DEFAULT_SETTINGS: AppSettingsV1 = {
     showBones: false,
     showHelpers: false,
     expandedByAsset: {},
+  },
+  export: {
+    format: "glb",
+    includeAnimations: true,
+    onlyVisible: true,
+    overwriteName: false,
   },
 };
 
@@ -143,6 +159,16 @@ export function updateHierarchySettings(patch: Partial<HierarchySettings>): AppS
   const next = coerceSettings({
     ...current,
     hierarchy: { ...current.hierarchy, ...patch },
+  }); // Merge patch then coerce.
+  return setSettings(next); // Persist and return.
+}
+
+export function updateExportSettings(patch: Partial<ExportSettings>): AppSettingsV1 {
+  // Update the Export section and persist it.
+  const current = getSettings(); // Read current cached settings.
+  const next = coerceSettings({
+    ...current,
+    export: { ...current.export, ...patch },
   }); // Merge patch then coerce.
   return setSettings(next); // Persist and return.
 }
@@ -222,6 +248,12 @@ function coerceSettings(value: unknown): AppSettingsV1 {
     base.hierarchy.expandedByAsset,
   ); // Expand/collapse persistence.
 
+  const exporting = (obj.export ?? {}) as Record<string, unknown>; // Read export section.
+  base.export.format = coerceExportFormat(exporting.format, base.export.format); // Export format.
+  base.export.includeAnimations = coerceBool(exporting.includeAnimations, base.export.includeAnimations); // Animation include toggle.
+  base.export.onlyVisible = coerceBool(exporting.onlyVisible, base.export.onlyVisible); // Only-visible toggle.
+  base.export.overwriteName = coerceBool(exporting.overwriteName, base.export.overwriteName); // Filename behavior toggle.
+
   return base; // Return a fully valid settings object.
 }
 
@@ -247,6 +279,12 @@ function coerceToolMode(value: unknown, fallback: ToolModeSetting): ToolModeSett
 function coercePivotMode(value: unknown, fallback: PivotModeSetting): PivotModeSetting {
   // Convert an unknown value into a valid pivot mode union.
   if (value === "pivot" || value === "center") return value; // Accept known strings.
+  return fallback; // Fall back to previous/default.
+}
+
+function coerceExportFormat(value: unknown, fallback: ExportFormatSetting): ExportFormatSetting {
+  // Convert an unknown value into a valid export format union.
+  if (value === "glb" || value === "gltf") return value; // Accept known strings.
   return fallback; // Fall back to previous/default.
 }
 

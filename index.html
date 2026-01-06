@@ -325,11 +325,37 @@
 
           <section class="panel"> <!-- Panel: export. -->
             <h2 class="panel-title">Export</h2> <!-- Panel heading. -->
+            <label class="field"> <!-- Field row: export format. -->
+              <span class="field-label">Format</span> <!-- Label for export format dropdown. -->
+              <select id="export-format" class="select"> <!-- Select output format. -->
+                <option value="glb">GLB (.glb)</option> <!-- Binary glTF: single file, best compatibility. -->
+                <option value="gltf">glTF (.gltf, embedded)</option> <!-- JSON glTF: single file with embedded data URIs. -->
+                <option value="fbx" disabled>FBX (.fbx) — not supported</option> <!-- FBX export is not available in-browser. -->
+              </select> <!-- End export format select. -->
+            </label> <!-- End export format field. -->
+
             <label class="checkbox"> <!-- Checkbox: include animations in export. -->
               <input id="export-animations" type="checkbox" checked /> <!-- Whether to include animation clips in the exported GLB. -->
               <span>Include animations</span> <!-- Label. -->
             </label> <!-- End export animations checkbox. -->
-            <button id="btn-export-glb" class="btn">Export GLB</button> <!-- Export button downloads a .glb file. -->
+            <label class="checkbox"> <!-- Checkbox: export only visible nodes. -->
+              <input id="export-only-visible" type="checkbox" checked /> <!-- When checked, hidden nodes are excluded from export. -->
+              <span>Export visible only</span> <!-- Label. -->
+            </label> <!-- End only-visible checkbox. -->
+
+            <label class="checkbox"> <!-- Checkbox: filename behavior. -->
+              <input id="export-overwrite-name" type="checkbox" /> <!-- When checked, use the original filename (no "-edited" suffix). -->
+              <span>Use original filename (overwrite)</span> <!-- Label text. -->
+            </label> <!-- End overwrite checkbox. -->
+
+            <div class="muted"> <!-- Small help line showing the computed output name. -->
+              Output: <code id="export-output-name">rigview3d-edited.glb</code> <!-- Preview of the file name that will be downloaded. -->
+            </div> <!-- End output name preview. -->
+            <div class="muted"> <!-- Note about unsupported formats. -->
+              FBX export is not supported in-browser. Export GLB/glTF and convert to FBX (e.g., Blender).
+            </div> <!-- End format note. -->
+
+            <button id="btn-export" class="btn">Export</button> <!-- Export button downloads a file in the selected format. -->
           </section> <!-- End Export panel. -->
 
           <section class="panel"> <!-- Panel: keyboard shortcuts help (read-only). -->

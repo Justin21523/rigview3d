@@ -22,6 +22,7 @@
 - `editor-phase-10`：Transform 工作流補強（Shift 多選 + 群組 gizmo + Pivot/Center + X/Y/Z 軸鎖 + Inspector 多選狀態）
 - `editor-phase-11`：Animation timeline（scrub + current time + range start/end + clip crossfade）
 - `editor-phase-12`：Hierarchy 可用性深化（Bones/Helpers filter + expand state persistence + selection/perf 改善）
+- `editor-phase-13`：Export 強化（GLB/glTF 格式 + 檔名 overwrite + onlyVisible + 匯出時 freeze）
 
 ## 查詢 tags
 

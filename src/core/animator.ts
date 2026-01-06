@@ -154,6 +154,23 @@ export class Animator {
     return this.crossfadeSeconds; // Return stored seconds.
   }
 
+  public freeze(): () => void {
+    // Temporarily freeze animation time progression (useful for deterministic exports).
+    //
+    // Why not just call `togglePause()`?
+    // - The UI state would change (Pause/Resume labels), which is noisy for background operations like export.
+    // - We only need to stop time progression for a moment; restoring `timeScale` is enough.
+    const mixer = this.mixer; // Snapshot current mixer so we can restore only if it is still the active one.
+    if (!mixer) return () => {}; // No mixer means no animation to freeze.
+    const previousTimeScale = mixer.timeScale; // Record current timeScale (0 when paused/stopped, `speed` when playing).
+    mixer.timeScale = 0; // Freeze time progression immediately.
+    return () => {
+      // Restore the previous timeScale if the mixer is still the same instance.
+      if (this.mixer !== mixer) return; // If a new model was loaded, do not touch the new mixer.
+      mixer.timeScale = previousTimeScale; // Restore previous time progression state.
+    };
+  }
+
   public onTimelineChange(listener: (state: TimelineState) => void): () => void {
     // Subscribe to timeline updates (time/duration/range changes during playback or scrubbing).
     this.timelineListeners.add(listener); // Register listener.

@@ -73,6 +73,16 @@ function applyInitialSettingsToDom(settings: ReturnType<typeof getSettings>): vo
   if (hierarchyBones) hierarchyBones.checked = settings.hierarchy.showBones; // Restore "show bones" preference.
   if (hierarchyHelpers) hierarchyHelpers.checked = settings.hierarchy.showHelpers; // Restore "show helpers" preference.
 
+  const exportFormat = document.getElementById("export-format") as HTMLSelectElement | null; // Export: format select.
+  const exportAnimations = document.getElementById("export-animations") as HTMLInputElement | null; // Export: include animations checkbox.
+  const exportOnlyVisible = document.getElementById("export-only-visible") as HTMLInputElement | null; // Export: only-visible checkbox.
+  const exportOverwriteName = document.getElementById("export-overwrite-name") as HTMLInputElement | null; // Export: filename mode checkbox.
+
+  if (exportFormat) exportFormat.value = settings.export.format; // Restore export format.
+  if (exportAnimations) exportAnimations.checked = settings.export.includeAnimations; // Restore include animations toggle.
+  if (exportOnlyVisible) exportOnlyVisible.checked = settings.export.onlyVisible; // Restore only-visible toggle.
+  if (exportOverwriteName) exportOverwriteName.checked = settings.export.overwriteName; // Restore overwrite-name toggle.
+
   const snapEnabled = document.getElementById("tool-snap-enabled") as HTMLInputElement | null; // Tools: snap checkbox.
   const snapMove = document.getElementById("tool-snap-move") as HTMLInputElement | null; // Tools: move step.
   const snapRotate = document.getElementById("tool-snap-rotate") as HTMLInputElement | null; // Tools: rotate step (deg).
