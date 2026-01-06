@@ -17,6 +17,7 @@
 - `editor-phase-5`：Editor polish（gizmo size、duplicate、更多鍵盤操作）
 - `editor-phase-6`：Unity-like 操作升級（Alt 相機、Fly/WASD、Hierarchy 右鍵、設定保存）
 - `editor-phase-7`：新增 FBX 載入支援（含貼圖路徑與常見貼圖格式）
+- `editor-phase-8`：修復互動體驗（Viewport focus 讓快捷鍵可用 + Alt orbit 開關）
 
 ## 查詢 tags
 

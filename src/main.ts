@@ -28,6 +28,7 @@ const viewer = new Viewer(canvas); // Create the viewer, which owns WebGLRendere
 viewer.setBackground(settings.scene.background); // Apply persisted background color.
 viewer.setKeyLightIntensity(settings.scene.keyLightIntensity); // Apply persisted key light intensity.
 viewer.setFillLightIntensity(settings.scene.fillLightIntensity); // Apply persisted fill light intensity.
+viewer.setUnityAltOrbitEnabled(settings.tools.unityAltOrbit); // Apply persisted camera navigation preference.
 
 const helpers = new Helpers(viewer.getScene()); // Add debug helpers (grid/axes) to the viewer scene immediately.
 const animator = new Animator(); // Create the animator (initially idle until a model with clips is loaded).
@@ -73,6 +74,7 @@ function applyInitialSettingsToDom(settings: ReturnType<typeof getSettings>): vo
   const nudge = document.getElementById("tool-nudge") as HTMLInputElement | null; // Tools: keyboard nudge step.
   const gizmoSize = document.getElementById("tool-gizmo-size") as HTMLInputElement | null; // Tools: gizmo size slider.
   const localSpace = document.getElementById("tool-space-local") as HTMLInputElement | null; // Tools: local/world checkbox.
+  const altOrbit = document.getElementById("tool-alt-orbit") as HTMLInputElement | null; // Tools: Unity-like Alt navigation toggle.
   const flyEnabled = document.getElementById("tool-fly-enabled") as HTMLInputElement | null; // Tools: fly toggle.
   const flySpeed = document.getElementById("tool-fly-speed") as HTMLInputElement | null; // Tools: fly speed slider.
 
@@ -83,6 +85,7 @@ function applyInitialSettingsToDom(settings: ReturnType<typeof getSettings>): vo
   if (nudge) nudge.value = String(settings.tools.nudgeStep); // Restore nudge step.
   if (gizmoSize) gizmoSize.value = String(settings.tools.gizmoSize); // Restore gizmo size.
   if (localSpace) localSpace.checked = settings.tools.localSpace; // Restore local/world.
+  if (altOrbit) altOrbit.checked = settings.tools.unityAltOrbit; // Restore Alt navigation preference.
   if (flyEnabled) flyEnabled.checked = settings.tools.flyEnabled; // Restore fly mode.
   if (flySpeed) flySpeed.value = String(settings.tools.flySpeed); // Restore fly speed.
 }

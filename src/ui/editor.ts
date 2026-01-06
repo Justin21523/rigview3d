@@ -23,6 +23,14 @@ export function initEditorUi(viewer: Viewer, editor: Editor): void {
   const canvas = document.getElementById("c") as HTMLCanvasElement | null; // Find the viewport canvas used for rendering.
   if (!canvas) throw new Error("Canvas element not found."); // Fail fast if markup is out of sync with code.
 
+  canvas.addEventListener("pointerdown", () => {
+    // Clicking the viewport should "take focus" (Unity-like) so keyboard shortcuts work immediately.
+    //
+    // In browsers, clicking a non-focusable element does not blur inputs, so the active text field can keep
+    // consuming shortcuts (our shortcut handler ignores keys while typing).
+    canvas.focus(); // Focus the canvas so `keydown` targets are no longer text inputs.
+  });
+
   const searchInput = mustGetEl("hierarchy-search") as HTMLInputElement; // Search box for filtering the hierarchy list.
   const tree = mustGetEl("hierarchy-tree"); // Container where hierarchy items will be rendered.
 

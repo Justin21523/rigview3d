@@ -22,6 +22,7 @@ export type ToolsSettings = {
   nudgeStep: number; // Arrow-key nudge step.
   gizmoSize: number; // TransformControls visual size multiplier.
   localSpace: boolean; // True = local space, false = world space.
+  unityAltOrbit: boolean; // When true, orbit/pan/dolly require holding Alt (Unity-like navigation).
   flyEnabled: boolean; // Fly mode toggle.
   flySpeed: number; // Fly movement speed in world units/second.
 };
@@ -60,6 +61,7 @@ const DEFAULT_SETTINGS: AppSettingsV1 = {
     nudgeStep: 0.05,
     gizmoSize: 1,
     localSpace: true,
+    unityAltOrbit: true,
     flyEnabled: false,
     flySpeed: 3,
   },
@@ -162,6 +164,7 @@ function coerceSettings(value: unknown): AppSettingsV1 {
   base.tools.nudgeStep = coerceNumber(tools.nudgeStep, base.tools.nudgeStep, 0, 1_000); // Nudge step.
   base.tools.gizmoSize = coerceNumber(tools.gizmoSize, base.tools.gizmoSize, 0.01, 10); // Gizmo size multiplier.
   base.tools.localSpace = coerceBool(tools.localSpace, base.tools.localSpace); // Local/world.
+  base.tools.unityAltOrbit = coerceBool(tools.unityAltOrbit, base.tools.unityAltOrbit); // Unity-like Alt navigation.
   base.tools.flyEnabled = coerceBool(tools.flyEnabled, base.tools.flyEnabled); // Fly mode toggle.
   base.tools.flySpeed = coerceNumber(tools.flySpeed, base.tools.flySpeed, 0.01, 1_000); // Fly speed.
 
@@ -205,4 +208,3 @@ function coerceColorHex(value: unknown, fallback: string): string {
   if (/^#[0-9a-fA-F]{6}$/.test(v)) return v; // Accept exactly 6-digit hex.
   return fallback; // Fall back for invalid formats.
 }
-

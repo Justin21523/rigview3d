@@ -22,6 +22,7 @@ export function initToolUi(viewer: Viewer, editor: Editor): void {
   const gizmoSize = mustGetEl("tool-gizmo-size") as HTMLInputElement; // Range input for TransformControls size scaling.
   const gizmoSizeValue = mustGetEl("tool-gizmo-size-value"); // Text label that shows gizmo size numeric value.
   const localSpace = mustGetEl("tool-space-local") as HTMLInputElement; // Checkbox for local/world space toggle.
+  const altOrbit = mustGetEl("tool-alt-orbit") as HTMLInputElement; // Checkbox for Unity-like Alt camera navigation.
   const flyEnabled = mustGetEl("tool-fly-enabled") as HTMLInputElement; // Checkbox for Fly/WASD camera mode.
   const flySpeed = mustGetEl("tool-fly-speed") as HTMLInputElement; // Range input for fly speed.
   const flySpeedValue = mustGetEl("tool-fly-speed-value"); // Text label for fly speed.
@@ -92,6 +93,12 @@ export function initToolUi(viewer: Viewer, editor: Editor): void {
     updateToolsSettings({ localSpace: localSpace.checked }); // Persist local/world toggle.
   });
 
+  altOrbit.addEventListener("change", () => {
+    // Enable/disable Unity-like "Alt + mouse" orbit navigation.
+    viewer.setUnityAltOrbitEnabled(altOrbit.checked); // Apply to Viewer immediately (changes OrbitControls mouse mapping).
+    updateToolsSettings({ unityAltOrbit: altOrbit.checked }); // Persist preference.
+  });
+
   flyEnabled.addEventListener("change", () => {
     // Enable/disable fly camera navigation mode.
     viewer.setFlyEnabled(flyEnabled.checked); // Apply to Viewer so camera navigation changes immediately.
@@ -122,6 +129,7 @@ export function initToolUi(viewer: Viewer, editor: Editor): void {
   editor.setGizmoSize(Number(gizmoSize.value)); // Apply initial gizmo size value.
   editor.setSpace(localSpace.checked ? "local" : "world"); // Apply initial local/world setting.
 
+  viewer.setUnityAltOrbitEnabled(altOrbit.checked); // Apply initial Alt navigation preference.
   viewer.setFlyEnabled(flyEnabled.checked); // Apply initial fly mode toggle state.
   viewer.setFlySpeed(Number(flySpeed.value)); // Apply initial fly speed.
 

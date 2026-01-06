@@ -94,7 +94,7 @@
         </aside> <!-- End left sidebar. -->
 
         <main class="viewport"> <!-- Main 3D viewport area. -->
-          <canvas id="c"></canvas> <!-- Canvas where Three.js renders the scene. -->
+          <canvas id="c" tabindex="0" aria-label="3D viewport"></canvas> <!-- Canvas where Three.js renders the scene (tabindex enables keyboard focus). -->
         </main> <!-- End viewport. -->
 
         <aside class="sidebar sidebar-right"> <!-- Right sidebar: tools + inspector + settings + export. -->
@@ -146,6 +146,11 @@
 	            </label> <!-- End local/world row. -->
 
               <h3 class="subhead">Camera</h3> <!-- Subheading for camera navigation settings. -->
+
+              <label class="checkbox"> <!-- Checkbox row: Unity-like Alt navigation toggle. -->
+                <input id="tool-alt-orbit" type="checkbox" checked /> <!-- When enabled, camera orbit/pan/dolly require holding Alt. -->
+                <span>Alt + mouse to orbit/pan/dolly (Unity)</span> <!-- Alt navigation label. -->
+              </label> <!-- End Alt navigation row. -->
 
               <label class="checkbox"> <!-- Checkbox row: fly/WASD mode toggle. -->
                 <input id="tool-fly-enabled" type="checkbox" /> <!-- Enables a Unity-like fly camera (WASD + RMB look). -->
