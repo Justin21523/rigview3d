@@ -8,9 +8,9 @@
 3. 先用 console.log 確認事件有觸發
 
 ## Level 2：改 Editor（但不碰 Loader/Animator）
-1. 在 Tools 面板加一個「Gizmo size」slider
-2. 在 `src/core/editor/editor.ts` 增加 `setGizmoSize(size)` 方法
-3. 呼叫 `TransformControls.setSize(size)`，讓 gizmo 變大/變小（很像 Unity）
+1. 讓 Tools 設定存到 localStorage（snap/steps/space/gizmo size）
+2. App 啟動時讀回並套用（避免每次重開都要重設）
+3. 注意：資料要做版本/預設值處理（避免改欄位後讀到舊資料壞掉）
 
 ## Level 3：改 Helpers
 1. 新增一個「Grid size」slider

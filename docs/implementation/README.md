@@ -26,6 +26,7 @@
 18. `17-shortcuts.md`：快捷鍵（Q/W/E/R、F、Del、Ctrl+Z/Y）
 19. `18-export-glb.md`：匯出 GLB（GLTFExporter）
 20. `19-delete-and-safety.md`：Delete 的取捨與資源管理注意事項
+21. `20-editor-polish.md`：Editor phase-5（duplicate / gizmo size / keyboard transforms）
 
 ## 如何對照程式碼
 建議你開兩個視窗：

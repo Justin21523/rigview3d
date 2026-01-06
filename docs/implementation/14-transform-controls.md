@@ -86,3 +86,16 @@ gizmo 很直覺，但精準數值很難拉到「剛好 1.0」。Inspector 的數
 
 下一章會把 Inspector 的資料流拆解給你看。
 
+## 7) Gizmo size：為什麼需要調整？
+
+有些模型非常大/非常小，gizmo 在畫面上可能：
+
+- 太小不好抓
+- 太大遮住模型
+
+所以 Tools 面板提供 `Gizmo size` slider，它只影響「gizmo 顯示大小」，不會改變實際的 transform 數值。
+
+對應：
+
+- `src/ui/tools.ts`：`#tool-gizmo-size` → `editor.setGizmoSize(value)`
+- `src/core/editor/editor.ts`：`TransformControls.setSize(size)`

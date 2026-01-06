@@ -14,6 +14,7 @@
 - `editor-phase-2`：Selection + Hierarchy（raycast picking + 場景樹列表）
 - `editor-phase-3`：TransformControls + Inspector + Scene 面板
 - `editor-phase-4`：Shortcuts + Undo/Redo + Export GLB（含 delete 可復原）
+- `editor-phase-5`：Editor polish（gizmo size、duplicate、更多鍵盤操作）
 
 ## 查詢 tags
 
