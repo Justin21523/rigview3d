@@ -12,22 +12,23 @@
 4. `03-threejs-mental-model.md`：Three.js 的基本世界觀（場景樹、座標、渲染）
 5. `04-viewer-render-loop.md`：`src/core/viewer.ts`（render loop、OrbitControls、frameObject）
 6. `05-loading-gltf-glb.md`：`src/core/loader.ts`（GLB/GLTF、blob URL、URLModifier）
-7. `06-ui-dom-events.md`：`src/ui/controls.ts`（drag & drop、file input、info panel）
-8. `07-animation-mixer.md`：`src/core/animator.ts`（AnimationMixer、Play/Pause/Stop、Loop/Speed）
-9. `08-debug-helpers.md`：`src/core/helpers.ts`（grid/axes/skeleton/wireframe）
-10. `09-cleanup-dispose.md`：`src/core/dispose.ts`（為什麼要 dispose、怎麼避免 GPU leak）
-11. `10-git-phases.md`：如何切換到每個 phase 的 git tag 來看「中間狀態」
-12. `11-next-steps.md`：你可以自己改什麼來練習（循序漸進）
-13. `12-editor-overview.md`：Editor 模式總覽（Hierarchy/Inspector/Tools）
-14. `13-selection-hierarchy.md`：selection 的 raycast 原理 + Hierarchy 如何渲染
-15. `14-transform-controls.md`：TransformControls（Move/Rotate/Scale gizmo）
-16. `15-inspector-transform-material.md`：Inspector（Transform + Material）
-17. `16-undo-redo-history.md`：Undo/Redo（history + snapshot）
-18. `17-shortcuts.md`：快捷鍵（Q/W/E/R、F、Del、Ctrl+Z/Y）
-19. `18-export-glb.md`：匯出 GLB（GLTFExporter）
-20. `19-delete-and-safety.md`：Delete 的取捨與資源管理注意事項
-21. `20-editor-polish.md`：Editor phase-5（duplicate / gizmo size / keyboard transforms）
-22. `21-editor-unity-camera-hierarchy-settings.md`：Editor phase-6（Alt 相機 / Fly / Hierarchy 右鍵 / Settings）
+7. `22-loading-fbx.md`：`src/core/loader.ts`（FBXLoader、貼圖路徑、TGA/DDS handler）
+8. `06-ui-dom-events.md`：`src/ui/controls.ts`（drag & drop、file input、info panel）
+9. `07-animation-mixer.md`：`src/core/animator.ts`（AnimationMixer、Play/Pause/Stop、Loop/Speed）
+10. `08-debug-helpers.md`：`src/core/helpers.ts`（grid/axes/skeleton/wireframe）
+11. `09-cleanup-dispose.md`：`src/core/dispose.ts`（為什麼要 dispose、怎麼避免 GPU leak）
+12. `10-git-phases.md`：如何切換到每個 phase 的 git tag 來看「中間狀態」
+13. `11-next-steps.md`：你可以自己改什麼來練習（循序漸進）
+14. `12-editor-overview.md`：Editor 模式總覽（Hierarchy/Inspector/Tools）
+15. `13-selection-hierarchy.md`：selection 的 raycast 原理 + Hierarchy 如何渲染
+16. `14-transform-controls.md`：TransformControls（Move/Rotate/Scale gizmo）
+17. `15-inspector-transform-material.md`：Inspector（Transform + Material）
+18. `16-undo-redo-history.md`：Undo/Redo（history + snapshot）
+19. `17-shortcuts.md`：快捷鍵（Q/W/E/R、F、Del、Ctrl+Z/Y）
+20. `18-export-glb.md`：匯出 GLB（GLTFExporter）
+21. `19-delete-and-safety.md`：Delete 的取捨與資源管理注意事項
+22. `20-editor-polish.md`：Editor phase-5（duplicate / gizmo size / keyboard transforms）
+23. `21-editor-unity-camera-hierarchy-settings.md`：Editor phase-6（Alt 相機 / Fly / Hierarchy 右鍵 / Settings）
 
 ## 如何對照程式碼
 建議你開兩個視窗：

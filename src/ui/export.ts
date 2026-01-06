@@ -39,7 +39,7 @@ export function initExportUi(editor: Editor, animator: Animator): void {
       })) as ArrayBuffer; // We expect ArrayBuffer because `binary: true`.
 
       const base = (editor.getSourceFileName() ?? "rigview3d") // Use original filename when available.
-        .replace(/\.(glb|gltf)$/i, "") // Strip common extensions for cleaner output names.
+        .replace(/\.(glb|gltf|fbx)$/i, "") // Strip common extensions for cleaner output names.
         .trim(); // Remove whitespace.
       const fileName = `${base || "rigview3d"}-edited.glb`; // Default export name.
 
@@ -85,4 +85,3 @@ function downloadArrayBuffer(data: ArrayBuffer, fileName: string): void {
 
   URL.revokeObjectURL(url); // Release memory for the object URL.
 }
-

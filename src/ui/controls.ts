@@ -12,14 +12,14 @@ import type { Animator } from "../core/animator"; // Import Animator type (runti
 import type { Editor } from "../core/editor/editor"; // Import Editor type (selection + hierarchy root state).
 import { disposeObject3D } from "../core/dispose"; // Import disposal utility to prevent GPU memory leaks on reload.
 import type { Helpers } from "../core/helpers"; // Import Helpers type for debug toggles (grid/axes/skeleton/wireframe).
-import type { ModelLoader } from "../core/loader"; // Import ModelLoader type (handles .glb/.gltf local loading).
+import type { ModelLoader } from "../core/loader"; // Import ModelLoader type (handles .glb/.gltf/.fbx local loading).
 import { updateDebugSettings } from "../core/settings"; // Import settings persistence helper for Debug toggles.
 import type { Viewer } from "../core/viewer"; // Import Viewer type (scene/camera/renderer/loop wrapper).
 
 export function initControls({
   // Public API: one call that wires all DOM behavior for the app.
   viewer, // The Viewer instance (used for reset camera, framing, scene add/remove, render list disposal).
-  loader, // The ModelLoader instance (used to load GLB/GLTF from dropped files).
+  loader, // The ModelLoader instance (used to load GLB/GLTF/FBX from dropped files).
   animator, // The Animator instance (used to manage clips and playback).
   helpers, // The Helpers instance (used to toggle debug helpers).
   editor, // The Editor instance (selection + hierarchy root state).

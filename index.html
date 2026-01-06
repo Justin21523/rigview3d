@@ -17,12 +17,12 @@
         <aside class="sidebar sidebar-left"> <!-- Left sidebar: load/info/hierarchy/animation/debug. -->
           <section class="panel"> <!-- Panel: model loading. -->
             <h2 class="panel-title">Load</h2> <!-- Panel heading. -->
-            <div id="dropzone" class="dropzone" role="button" tabindex="0" aria-label="Drop GLB/GLTF files here or click to select"> <!-- Drag-and-drop target + click-to-browse. -->
-              <div class="dropzone-title">Drop a .glb/.gltf here</div> <!-- Primary instruction. -->
+            <div id="dropzone" class="dropzone" role="button" tabindex="0" aria-label="Drop GLB/GLTF/FBX files here or click to select"> <!-- Drag-and-drop target + click-to-browse. -->
+              <div class="dropzone-title">Drop a .glb/.gltf/.fbx here</div> <!-- Primary instruction. -->
               <div class="dropzone-subtitle">or click to browse</div> <!-- Secondary instruction. -->
-              <div class="dropzone-hint">For .gltf, drop the .gltf + .bin + textures together.</div> <!-- Hint for multi-file glTF loads. -->
+              <div class="dropzone-hint">For .gltf/.fbx, drop the model + textures together (and .bin for .gltf).</div> <!-- Hint for multi-file loads. -->
             </div> <!-- End dropzone. -->
-            <input id="file-input" type="file" hidden multiple accept=".glb,.gltf,.bin,.png,.jpg,.jpeg,.webp" /> <!-- Hidden file input used when dropzone is clicked. -->
+            <input id="file-input" type="file" hidden multiple accept=".glb,.gltf,.fbx,.bin,.png,.jpg,.jpeg,.webp,.tga,.dds" /> <!-- Hidden file input used when dropzone is clicked. -->
           </section> <!-- End Load panel. -->
 
           <section class="panel"> <!-- Panel: model info. -->

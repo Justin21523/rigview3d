@@ -2,6 +2,8 @@
 
 對照檔案：`src/core/loader.ts`
 
+補充：如果你要看 `.fbx` 的載入與貼圖對應，請看 `22-loading-fbx.md`。
+
 ## GLB vs GLTF（白話）
 
 - `.glb`：一個檔案包全部（mesh、材質、貼圖、動畫），最方便
@@ -51,4 +53,3 @@ try {
   revokeAll()
 }
 ```
-

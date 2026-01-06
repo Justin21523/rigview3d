@@ -14,7 +14,7 @@
 - `src/ui/export.ts`：匯出面板（GLB download）
 - `src/ui/shortcuts.ts`：鍵盤快捷鍵（undo/redo、frame、delete…）
 - `src/core/viewer.ts`：Three.js 渲染核心（scene/camera/renderer/loop）
-- `src/core/loader.ts`：GLB/GLTF 載入（含 `.gltf` 多檔案 blob URL 對應）
+- `src/core/loader.ts`：GLB/GLTF/FBX 載入（含 `.gltf` 多檔案 blob URL 對應 + FBX 貼圖路徑 mapping）
 - `src/core/animator.ts`：動畫播放控制（AnimationMixer、loop、speed）
 - `src/core/helpers.ts`：debug helpers（grid/axes/skeleton/wireframe）
 - `src/core/dispose.ts`：釋放 GPU 資源（避免重複載入越來越慢）

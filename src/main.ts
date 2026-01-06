@@ -7,7 +7,7 @@
 import { Animator } from "./core/animator"; // Import the animation controller (AnimationMixer wrapper).
 import { Editor } from "./core/editor/editor"; // Import the editor system (selection now; gizmos/undo/export later).
 import { Helpers } from "./core/helpers"; // Import debug helpers (grid/axes/skeleton/wireframe).
-import { ModelLoader } from "./core/loader"; // Import the GLB/GLTF loader for drag-and-drop files.
+import { ModelLoader } from "./core/loader"; // Import the model loader for drag-and-drop files (GLB/GLTF/FBX).
 import { getSettings } from "./core/settings"; // Import localStorage-backed settings (Tools/Scene/Debug persistence).
 import { Viewer } from "./core/viewer"; // Import the Three.js viewer (scene/camera/renderer/loop).
 import { initControls } from "./ui/controls"; // Import DOM wiring that binds buttons/inputs to core logic.
