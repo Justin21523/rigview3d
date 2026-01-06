@@ -32,6 +32,7 @@
 24. `23-editor-focus-and-camera-toggle.md`：Editor phase-8（Viewport focus 修復 / 相機滑鼠 mapping 開關 / 點選保護）
 25. `24-editor-interaction-recovery.md`：Editor phase-9（gizmo 拖曳後相機不再卡死）
 26. `25-editor-multi-selection-pivot-axis.md`：Editor phase-10（多選 / 群組 gizmo / Pivot-Center / X-Y-Z 軸鎖）
+27. `26-animation-timeline.md`：Editor phase-11（timeline scrub / range / crossfade）
 
 ## 如何對照程式碼
 建議你開兩個視窗：

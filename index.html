@@ -66,11 +66,35 @@
               <span id="anim-speed-value" class="field-value">1.00x</span> <!-- Live label showing the selected speed multiplier. -->
             </label> <!-- End speed field. -->
 
-            <label class="checkbox"> <!-- Checkbox row: loop mode. -->
-              <input id="anim-loop" type="checkbox" checked disabled /> <!-- Checked = repeat; unchecked = play once. -->
-              <span>Loop</span> <!-- Loop label text. -->
-            </label> <!-- End loop row. -->
-          </section> <!-- End Animation panel. -->
+	            <label class="checkbox"> <!-- Checkbox row: loop mode. -->
+	              <input id="anim-loop" type="checkbox" checked disabled /> <!-- Checked = repeat; unchecked = play once. -->
+	              <span>Loop</span> <!-- Loop label text. -->
+	            </label> <!-- End loop row. -->
+
+	            <label class="field"> <!-- Field: timeline scrubber. -->
+	              <span class="field-label">Time</span> <!-- Label for scrub slider. -->
+	              <input id="anim-scrub" class="range" type="range" min="0" max="1" step="0.001" value="0" disabled /> <!-- Scrub within the active clip. -->
+	              <span id="anim-time-value" class="field-value">0.00 / 0.00</span> <!-- Current time and duration display. -->
+	            </label> <!-- End scrub field. -->
+
+	            <label class="field"> <!-- Field: playback range start (seconds). -->
+	              <span class="field-label">Range start</span> <!-- Label. -->
+	              <input id="anim-range-start" class="number-input" type="number" min="0" step="0.01" value="0" disabled /> <!-- Start time in seconds. -->
+	              <span class="field-value">s</span> <!-- Unit label. -->
+	            </label> <!-- End range start field. -->
+
+	            <label class="field"> <!-- Field: playback range end (seconds). -->
+	              <span class="field-label">Range end</span> <!-- Label. -->
+	              <input id="anim-range-end" class="number-input" type="number" min="0" step="0.01" value="0" disabled /> <!-- End time in seconds (clamped to duration). -->
+	              <span class="field-value">s</span> <!-- Unit label. -->
+	            </label> <!-- End range end field. -->
+
+	            <label class="field"> <!-- Field: crossfade duration when switching clips while playing. -->
+	              <span class="field-label">Crossfade</span> <!-- Label. -->
+	              <input id="anim-crossfade" class="range" type="range" min="0" max="1" step="0.05" value="0.2" disabled /> <!-- Crossfade time in seconds. -->
+	              <span id="anim-crossfade-value" class="field-value">0.20s</span> <!-- Value label. -->
+	            </label> <!-- End crossfade field. -->
+	          </section> <!-- End Animation panel. -->
 
           <section class="panel"> <!-- Panel: debug toggles (helpers). -->
             <h2 class="panel-title">Debug</h2> <!-- Panel heading. -->

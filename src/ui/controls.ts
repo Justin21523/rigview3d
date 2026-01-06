@@ -49,6 +49,12 @@ export function initControls({
   const speedInput = mustGetEl("anim-speed") as HTMLInputElement; // `<input type="range">` for speed.
   const speedValue = mustGetEl("anim-speed-value"); // Text element that displays the current speed as "1.00x".
   const loopCheckbox = mustGetEl("anim-loop") as HTMLInputElement; // Checkbox controlling loop mode (repeat vs once).
+  const scrubInput = mustGetEl("anim-scrub") as HTMLInputElement; // Timeline scrub slider (seeks within the active clip).
+  const timeValue = mustGetEl("anim-time-value"); // Text element that shows "current time / duration".
+  const rangeStartInput = mustGetEl("anim-range-start") as HTMLInputElement; // Number input for playback range start (seconds).
+  const rangeEndInput = mustGetEl("anim-range-end") as HTMLInputElement; // Number input for playback range end (seconds).
+  const crossfadeInput = mustGetEl("anim-crossfade") as HTMLInputElement; // Slider that controls clip switching crossfade duration.
+  const crossfadeValue = mustGetEl("anim-crossfade-value"); // Text element that shows the current crossfade seconds value.
 
   const gridCheckbox = mustGetEl("dbg-grid") as HTMLInputElement; // Toggle for GridHelper visibility.
   const axesCheckbox = mustGetEl("dbg-axes") as HTMLInputElement; // Toggle for AxesHelper visibility.
@@ -103,6 +109,12 @@ export function initControls({
         speedInput, // Pass speed slider.
         speedValue, // Pass speed text.
         loopCheckbox, // Pass loop checkbox.
+        scrubInput, // Pass scrub slider.
+        timeValue, // Pass time label.
+        rangeStartInput, // Pass range start input.
+        rangeEndInput, // Pass range end input.
+        crossfadeInput, // Pass crossfade slider.
+        crossfadeValue, // Pass crossfade value label.
       }); // End sync call.
 
       const stats = getModelStats(result.root, result.animations); // Compute basic counts for the Info panel and debug toggle enablement.
@@ -157,6 +169,12 @@ export function initControls({
         speedInput, // Speed slider.
         speedValue, // Speed text.
         loopCheckbox, // Loop checkbox.
+        scrubInput, // Scrub slider.
+        timeValue, // Time label.
+        rangeStartInput, // Range start.
+        rangeEndInput, // Range end.
+        crossfadeInput, // Crossfade slider.
+        crossfadeValue, // Crossfade label.
       }); // End sync call.
 
       helpers.setModelRoot(null); // Clear model binding for helpers (removes skeleton helper, etc.).
@@ -213,6 +231,12 @@ export function initControls({
       speedInput, // Speed slider.
       speedValue, // Speed label.
       loopCheckbox, // Loop checkbox.
+      scrubInput, // Timeline scrub slider.
+      timeValue, // Time label.
+      rangeStartInput, // Range start input.
+      rangeEndInput, // Range end input.
+      crossfadeInput, // Crossfade slider.
+      crossfadeValue, // Crossfade value label.
     });
   });
 
@@ -228,6 +252,12 @@ export function initControls({
       speedInput, // Speed slider.
       speedValue, // Speed label.
       loopCheckbox, // Loop checkbox.
+      scrubInput, // Timeline scrub slider.
+      timeValue, // Time label.
+      rangeStartInput, // Range start input.
+      rangeEndInput, // Range end input.
+      crossfadeInput, // Crossfade slider.
+      crossfadeValue, // Crossfade value label.
     });
   });
 
@@ -243,6 +273,12 @@ export function initControls({
       speedInput, // Speed slider.
       speedValue, // Speed label.
       loopCheckbox, // Loop checkbox.
+      scrubInput, // Timeline scrub slider.
+      timeValue, // Time label.
+      rangeStartInput, // Range start input.
+      rangeEndInput, // Range end input.
+      crossfadeInput, // Crossfade slider.
+      crossfadeValue, // Crossfade value label.
     });
   });
 
@@ -258,6 +294,12 @@ export function initControls({
       speedInput, // Speed slider.
       speedValue, // Speed label.
       loopCheckbox, // Loop checkbox.
+      scrubInput, // Timeline scrub slider.
+      timeValue, // Time label.
+      rangeStartInput, // Range start input.
+      rangeEndInput, // Range end input.
+      crossfadeInput, // Crossfade slider.
+      crossfadeValue, // Crossfade value label.
     });
   });
 
@@ -274,6 +316,12 @@ export function initControls({
       speedInput, // Speed slider.
       speedValue, // Speed label.
       loopCheckbox, // Loop checkbox.
+      scrubInput, // Timeline scrub slider.
+      timeValue, // Time label.
+      rangeStartInput, // Range start input.
+      rangeEndInput, // Range end input.
+      crossfadeInput, // Crossfade slider.
+      crossfadeValue, // Crossfade value label.
     });
   });
 
@@ -289,7 +337,74 @@ export function initControls({
       speedInput, // Speed slider.
       speedValue, // Speed label.
       loopCheckbox, // Loop checkbox.
+      scrubInput, // Timeline scrub slider.
+      timeValue, // Time label.
+      rangeStartInput, // Range start input.
+      rangeEndInput, // Range end input.
+      crossfadeInput, // Crossfade slider.
+      crossfadeValue, // Crossfade value label.
     });
+  });
+
+  let isScrubbing = false; // Track whether the user is actively dragging the scrub slider (prevents UI "fighting" playback).
+
+  scrubInput.addEventListener("pointerdown", () => {
+    // Mark scrubbing as active when the user presses the pointer on the slider thumb/track.
+    isScrubbing = true; // Set flag so timeline updates don't overwrite the user's drag position.
+  });
+  window.addEventListener("pointerup", () => {
+    // Reset scrubbing state when the pointer is released anywhere (not only on the slider).
+    isScrubbing = false; // Clear flag so playback can drive the slider again.
+  });
+  scrubInput.addEventListener("change", () => {
+    // Also clear on change (covers keyboard adjustments and some non-pointer interactions).
+    isScrubbing = false; // Clear flag.
+  });
+
+  scrubInput.addEventListener("input", () => {
+    // Seek animation time as the user drags the scrub slider.
+    const value = scrubInput.valueAsNumber; // Use valueAsNumber to avoid manual string parsing.
+    if (!Number.isFinite(value)) return; // Guard against NaN (can happen when disabled or not yet initialized).
+    animator.setTime(value); // Seek within the current playback range and apply the pose immediately.
+  });
+
+  rangeStartInput.addEventListener("input", () => {
+    // Update the playback range start while the user edits the number input.
+    const value = rangeStartInput.valueAsNumber; // Read number value (NaN if empty/invalid).
+    if (!Number.isFinite(value)) return; // Ignore invalid values during typing.
+    animator.setRangeStart(value); // Clamp range and re-clamp the current time if needed.
+  });
+
+  rangeEndInput.addEventListener("input", () => {
+    // Update the playback range end while the user edits the number input.
+    const value = rangeEndInput.valueAsNumber; // Read number value.
+    if (!Number.isFinite(value)) return; // Ignore invalid values.
+    animator.setRangeEnd(value); // Clamp range and re-clamp the current time if needed.
+  });
+
+  crossfadeInput.addEventListener("input", () => {
+    // Update crossfade duration used when switching clips while playing.
+    const value = crossfadeInput.valueAsNumber; // Read slider value (seconds).
+    if (!Number.isFinite(value)) return; // Ignore invalid values.
+    animator.setCrossfadeSeconds(value); // Store in animator (used next time a clip is switched).
+    crossfadeValue.textContent = `${value.toFixed(2)}s`; // Update UI label immediately.
+  });
+
+  animator.onTimelineChange((state) => {
+    // Keep timeline UI in sync with animator state (updates while playing, pausing, and scrubbing).
+    const duration = state.duration; // Clip duration in seconds.
+    const time = state.time; // Current time in seconds.
+
+    scrubInput.max = String(duration); // Set slider max to duration so it maps 1:1 with seconds.
+    if (!isScrubbing) scrubInput.value = String(time); // Only overwrite slider position when the user isn't dragging it.
+
+    timeValue.textContent = `${time.toFixed(2)} / ${duration.toFixed(2)}`; // Show current time and duration.
+
+    rangeStartInput.max = String(duration); // Clamp UI bounds to duration.
+    rangeEndInput.max = String(duration); // Clamp UI bounds to duration.
+
+    if (document.activeElement !== rangeStartInput) rangeStartInput.value = state.rangeStart.toFixed(2); // Avoid overwriting while typing.
+    if (document.activeElement !== rangeEndInput) rangeEndInput.value = state.rangeEnd.toFixed(2); // Avoid overwriting while typing.
   });
 
   gridCheckbox.addEventListener("change", () => {
@@ -323,6 +438,12 @@ export function initControls({
     speedInput, // Speed slider.
     speedValue, // Speed label.
     loopCheckbox, // Loop checkbox.
+    scrubInput, // Timeline scrub slider.
+    timeValue, // Time label.
+    rangeStartInput, // Range start input.
+    rangeEndInput, // Range end input.
+    crossfadeInput, // Crossfade slider.
+    crossfadeValue, // Crossfade value label.
   });
 
   helpers.setGridVisible(gridCheckbox.checked); // Apply initial grid state from DOM (which may be restored from settings).
@@ -413,6 +534,12 @@ function syncAnimUi(
     speedInput: HTMLInputElement; // Speed slider.
     speedValue: HTMLElement; // Speed label.
     loopCheckbox: HTMLInputElement; // Loop checkbox.
+    scrubInput: HTMLInputElement; // Timeline scrub slider.
+    timeValue: HTMLElement; // Timeline time label.
+    rangeStartInput: HTMLInputElement; // Playback range start input.
+    rangeEndInput: HTMLInputElement; // Playback range end input.
+    crossfadeInput: HTMLInputElement; // Crossfade duration slider.
+    crossfadeValue: HTMLElement; // Crossfade value label.
   }, // End element group type.
 ): void {
   const clips = animator.getClips(); // Read the current clip list.
@@ -424,6 +551,10 @@ function syncAnimUi(
   els.stopBtn.disabled = !hasClips; // Disable Stop when no clips exist.
   els.speedInput.disabled = !hasClips; // Disable speed slider when no clips exist.
   els.loopCheckbox.disabled = !hasClips; // Disable loop toggle when no clips exist.
+  els.scrubInput.disabled = !hasClips; // Disable scrub slider when no clips exist.
+  els.rangeStartInput.disabled = !hasClips; // Disable range start input when no clips exist.
+  els.rangeEndInput.disabled = !hasClips; // Disable range end input when no clips exist.
+  els.crossfadeInput.disabled = !hasClips; // Disable crossfade when no clips exist.
 
   const selectedIndex = animator.getSelectedIndex(); // Read current selection index from animator.
   if (hasClips && selectedIndex >= 0) els.clipSelect.value = String(selectedIndex); // Keep dropdown value consistent with state.
@@ -433,6 +564,24 @@ function syncAnimUi(
   els.speedValue.textContent = `${speed.toFixed(2)}x`; // Show speed as a fixed 2-decimal multiplier.
 
   els.loopCheckbox.checked = animator.getLoopMode() === "repeat"; // Map loop mode to checkbox state.
+
+  const time = animator.getTime(); // Read current time for the timeline UI.
+  const duration = animator.getDuration(); // Read current clip duration for max/label formatting.
+  els.scrubInput.min = "0"; // Always allow scrubbing from 0 seconds.
+  els.scrubInput.max = String(duration); // Set scrub max to duration (seconds).
+  els.scrubInput.value = String(time); // Keep scrub slider position in sync with animator time.
+  els.timeValue.textContent = `${time.toFixed(2)} / ${duration.toFixed(2)}`; // Show "t / duration" to the user.
+
+  els.rangeStartInput.min = "0"; // Range always starts at or after 0 seconds.
+  els.rangeStartInput.max = String(duration); // Clamp UI bounds to clip duration.
+  els.rangeEndInput.min = "0"; // Range end also uses 0 as the minimum.
+  els.rangeEndInput.max = String(duration); // Clamp UI bounds to clip duration.
+  if (document.activeElement !== els.rangeStartInput) els.rangeStartInput.value = animator.getRangeStart().toFixed(2); // Avoid overwriting while typing.
+  if (document.activeElement !== els.rangeEndInput) els.rangeEndInput.value = animator.getRangeEnd().toFixed(2); // Avoid overwriting while typing.
+
+  const crossfade = animator.getCrossfadeSeconds(); // Read crossfade duration (seconds) for UI initialization.
+  els.crossfadeInput.value = String(crossfade); // Keep slider position in sync with animator state.
+  els.crossfadeValue.textContent = `${crossfade.toFixed(2)}s`; // Show crossfade in seconds.
 
   const state = animator.getPlayState(); // Read play state for UI label logic.
   els.pauseBtn.textContent = state === "paused" ? "Resume" : "Pause"; // Change button label depending on pause state.
