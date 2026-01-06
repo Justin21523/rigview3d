@@ -4,8 +4,10 @@
 // numeric inputs) synchronized with Editor state.
 
 import type { Editor, ToolMode } from "../core/editor/editor"; // Import Editor/tool types (selection + gizmo configuration).
+import { updateToolsSettings } from "../core/settings"; // Import settings persistence helpers for Tools panel.
+import type { Viewer } from "../core/viewer"; // Import Viewer type (camera navigation toggles live in Viewer).
 
-export function initToolUi(editor: Editor): void {
+export function initToolUi(viewer: Viewer, editor: Editor): void {
   // Public API: attach Tools panel behavior to the DOM.
   const btnSelect = mustGetEl("tool-select") as HTMLButtonElement; // "Select" tool button (Q).
   const btnMove = mustGetEl("tool-move") as HTMLButtonElement; // "Move" tool button (W).
@@ -20,6 +22,9 @@ export function initToolUi(editor: Editor): void {
   const gizmoSize = mustGetEl("tool-gizmo-size") as HTMLInputElement; // Range input for TransformControls size scaling.
   const gizmoSizeValue = mustGetEl("tool-gizmo-size-value"); // Text label that shows gizmo size numeric value.
   const localSpace = mustGetEl("tool-space-local") as HTMLInputElement; // Checkbox for local/world space toggle.
+  const flyEnabled = mustGetEl("tool-fly-enabled") as HTMLInputElement; // Checkbox for Fly/WASD camera mode.
+  const flySpeed = mustGetEl("tool-fly-speed") as HTMLInputElement; // Range input for fly speed.
+  const flySpeedValue = mustGetEl("tool-fly-speed-value"); // Text label for fly speed.
 
   const setActive = (mode: ToolMode) => {
     // Update active button styling based on the current tool mode.
@@ -37,6 +42,7 @@ export function initToolUi(editor: Editor): void {
   snapEnabled.addEventListener("change", () => {
     // Toggle snapping on/off.
     editor.setSnapEnabled(snapEnabled.checked); // Apply checkbox to Editor snap settings.
+    updateToolsSettings({ snapEnabled: snapEnabled.checked }); // Persist snap toggle to localStorage.
   });
 
   snapMove.addEventListener("input", () => {
@@ -44,6 +50,7 @@ export function initToolUi(editor: Editor): void {
     const value = Number(snapMove.value); // Convert the text input value into a number.
     if (!Number.isFinite(value)) return; // Ignore invalid numbers.
     editor.setTranslationSnap(value); // Apply to TransformControls translation snap.
+    updateToolsSettings({ snapMove: value }); // Persist move step.
   });
 
   snapRotate.addEventListener("input", () => {
@@ -51,6 +58,7 @@ export function initToolUi(editor: Editor): void {
     const value = Number(snapRotate.value); // Parse degrees from input.
     if (!Number.isFinite(value)) return; // Ignore invalid numbers.
     editor.setRotationSnapDegrees(value); // Convert to radians internally and apply to TransformControls.
+    updateToolsSettings({ snapRotateDeg: value }); // Persist rotate step.
   });
 
   snapScale.addEventListener("input", () => {
@@ -58,6 +66,7 @@ export function initToolUi(editor: Editor): void {
     const value = Number(snapScale.value); // Parse number from input.
     if (!Number.isFinite(value)) return; // Ignore invalid numbers.
     editor.setScaleSnap(value); // Apply to TransformControls scale snap.
+    updateToolsSettings({ snapScale: value }); // Persist scale step.
   });
 
   nudgeStep.addEventListener("input", () => {
@@ -65,6 +74,7 @@ export function initToolUi(editor: Editor): void {
     const value = Number(nudgeStep.value); // Parse number from input.
     if (!Number.isFinite(value)) return; // Ignore invalid numbers.
     editor.setNudgeStep(value); // Store in Editor (used later by arrow-key shortcuts).
+    updateToolsSettings({ nudgeStep: value }); // Persist nudge step.
   });
 
   gizmoSize.addEventListener("input", () => {
@@ -73,14 +83,35 @@ export function initToolUi(editor: Editor): void {
     if (!Number.isFinite(value)) return; // Ignore invalid numbers.
     editor.setGizmoSize(value); // Apply size to TransformControls.
     gizmoSizeValue.textContent = value.toFixed(2); // Update label so user sees the exact value.
+    updateToolsSettings({ gizmoSize: value }); // Persist gizmo size.
   });
 
   localSpace.addEventListener("change", () => {
     // Toggle between local and world gizmo orientation.
     editor.setSpace(localSpace.checked ? "local" : "world"); // Map checkbox to TransformControls space strings.
+    updateToolsSettings({ localSpace: localSpace.checked }); // Persist local/world toggle.
   });
 
-  editor.onToolModeChange((mode) => setActive(mode)); // Keep UI in sync when tool mode changes programmatically (e.g., shortcuts).
+  flyEnabled.addEventListener("change", () => {
+    // Enable/disable fly camera navigation mode.
+    viewer.setFlyEnabled(flyEnabled.checked); // Apply to Viewer so camera navigation changes immediately.
+    updateToolsSettings({ flyEnabled: flyEnabled.checked }); // Persist fly mode toggle.
+  });
+
+  flySpeed.addEventListener("input", () => {
+    // Update fly speed while the user drags the slider.
+    const value = Number(flySpeed.value); // Parse slider value.
+    if (!Number.isFinite(value)) return; // Ignore invalid numbers.
+    viewer.setFlySpeed(value); // Apply to Viewer fly speed.
+    flySpeedValue.textContent = value.toFixed(1); // Update label so the value is visible.
+    updateToolsSettings({ flySpeed: value }); // Persist fly speed.
+  });
+
+  editor.onToolModeChange((mode) => {
+    // Keep UI and persisted settings in sync when tool mode changes (buttons or keyboard).
+    setActive(mode); // Update button highlight.
+    updateToolsSettings({ toolMode: mode }); // Persist tool mode.
+  });
 
   // Initialize Editor state from DOM defaults so the gizmo behavior matches the visible UI controls.
   editor.setSnapEnabled(snapEnabled.checked); // Apply initial snap toggle state.
@@ -91,7 +122,11 @@ export function initToolUi(editor: Editor): void {
   editor.setGizmoSize(Number(gizmoSize.value)); // Apply initial gizmo size value.
   editor.setSpace(localSpace.checked ? "local" : "world"); // Apply initial local/world setting.
 
+  viewer.setFlyEnabled(flyEnabled.checked); // Apply initial fly mode toggle state.
+  viewer.setFlySpeed(Number(flySpeed.value)); // Apply initial fly speed.
+
   gizmoSizeValue.textContent = Number(gizmoSize.value).toFixed(2); // Initialize gizmo size label from the input default.
+  flySpeedValue.textContent = Number(flySpeed.value).toFixed(1); // Initialize fly speed value label.
   setActive(editor.getToolMode()); // Sync button highlight for the initial tool mode.
 }
 

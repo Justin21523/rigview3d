@@ -144,6 +144,19 @@
 	              <input id="tool-space-local" type="checkbox" checked /> <!-- Checked = local space, unchecked = world space. -->
 	              <span>Local space</span> <!-- Local space label. -->
 	            </label> <!-- End local/world row. -->
+
+              <h3 class="subhead">Camera</h3> <!-- Subheading for camera navigation settings. -->
+
+              <label class="checkbox"> <!-- Checkbox row: fly/WASD mode toggle. -->
+                <input id="tool-fly-enabled" type="checkbox" /> <!-- Enables a Unity-like fly camera (WASD + RMB look). -->
+                <span>Fly mode (WASD + RMB look)</span> <!-- Fly mode label. -->
+              </label> <!-- End fly mode row. -->
+
+              <label class="field"> <!-- Field: fly speed slider. -->
+                <span class="field-label">Fly speed</span> <!-- Label for speed. -->
+                <input id="tool-fly-speed" class="range" type="range" min="0.5" max="20" step="0.5" value="3" /> <!-- Base fly speed in world units/sec. -->
+                <span id="tool-fly-speed-value" class="field-value">3.0</span> <!-- Value label for current fly speed. -->
+              </label> <!-- End fly speed field. -->
 	          </section> <!-- End Tools panel. -->
 
           <section class="panel"> <!-- Panel: inspector like Unity Inspector. -->
@@ -265,6 +278,13 @@
 	              <div><span class="kbd">Arrows</span> Nudge</div> <!-- Translate selection in world X/Z. -->
 	              <div><span class="kbd">[</span>/<span class="kbd">]</span> Rotate</div> <!-- Rotate selection around Y axis. -->
 	              <div><span class="kbd">-</span>/<span class="kbd">=</span> Scale</div> <!-- Uniform scale. -->
+	              <div><span class="kbd">Alt</span>+<span class="kbd">LMB</span> Orbit</div> <!-- Unity-like orbit. -->
+	              <div><span class="kbd">Alt</span>+<span class="kbd">MMB</span> Pan</div> <!-- Unity-like pan. -->
+	              <div><span class="kbd">Alt</span>+<span class="kbd">RMB</span> Dolly</div> <!-- Unity-like dolly. -->
+	              <div><span class="kbd">Fly</span>: <span class="kbd">RMB</span>+Move Look</div> <!-- Fly camera look. -->
+	              <div><span class="kbd">Fly</span>: <span class="kbd">WASD</span> Move</div> <!-- Fly camera movement. -->
+	              <div><span class="kbd">Fly</span>: <span class="kbd">Q</span>/<span class="kbd">E</span> Down/Up</div> <!-- Fly vertical. -->
+	              <div><span class="kbd">Fly</span>: <span class="kbd">Shift</span> Faster</div> <!-- Fly speed modifier. -->
 	            </div> <!-- End shortcut list. -->
 	          </section> <!-- End Shortcuts panel. -->
         </aside> <!-- End right sidebar. -->

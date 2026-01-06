@@ -32,6 +32,7 @@ export class Editor {
 
   private modelRoot: THREE.Object3D | null = null; // The current editable model root (null when no model loaded).
   private selection: THREE.Object3D | null = null; // The currently selected object inside the model root.
+  private hover: THREE.Object3D | null = null; // The currently hovered object (used for non-committal hover feedback).
   private sourceFileName: string | null = null; // The original filename of the loaded asset (used as a default export name).
 
   private readonly history = new HistoryStack(); // Undo/redo stack for editor operations.
@@ -40,9 +41,10 @@ export class Editor {
   private readonly pointerNdc = new THREE.Vector2(); // Pointer position in Normalized Device Coordinates (-1..1).
 
   private selectionHelper: THREE.BoxHelper | null = null; // BoxHelper outline around the selected object.
+  private hoverHelper: THREE.BoxHelper | null = null; // BoxHelper outline around the hovered object (lighter than selection).
 
   private readonly transformControls: TransformControls; // Transform gizmo that can attach to the current selection.
-  private toolMode: ToolMode = "select"; // Current active tool mode (select by default).
+  private toolMode: ToolMode = "move"; // Current active tool mode (default to Move so gizmo is visible like Unity).
   private isDraggingTransform = false; // True while the gizmo is actively dragging (used to avoid accidental picking).
   private gizmoStart: TransformSnapshot | null = null; // Transform snapshot captured at the start of a gizmo drag.
   private gizmoObject: THREE.Object3D | null = null; // Object that was being manipulated when the gizmo drag started.
@@ -69,7 +71,8 @@ export class Editor {
       this.viewer.getDomElement(), // TransformControls needs the canvas DOM element to listen for pointer events.
     ); // End TransformControls constructor call.
     this.transformControls.visible = false; // Hide the gizmo until we have a selection + an active transform tool.
-    this.transformControls.enabled = false; // Disable pointer handling until the user switches away from Select mode.
+    this.transformControls.enabled = true; // Allow pointer handling for the default Move tool (gizmo still hidden until attach()).
+    this.transformControls.setMode("translate"); // Default to translation gizmo so first selection is immediately draggable.
     this.transformControls.setSize(this.gizmoSize); // Apply default gizmo size immediately so UI slider matches behavior.
     this.viewer.getScene().add(this.transformControls); // Add gizmo to the scene so it renders in the viewport.
 
@@ -125,6 +128,7 @@ export class Editor {
     // Set the current editable model root (call when a model is loaded/unloaded).
     if (this.modelRoot === root) return; // Avoid redundant work if nothing changed.
     this.clearSelection(); // Clear selection so we never keep references to objects from the previous model.
+    this.clearHover(); // Clear hover state because it can reference objects from the previous model.
     this.history.clear(); // Clear undo/redo history because it may reference objects from the previous model.
     this.modelRoot = root; // Store the new root.
     if (!root) this.sourceFileName = null; // Clear source filename when the model is unloaded.
@@ -155,6 +159,11 @@ export class Editor {
   public getSelection(): THREE.Object3D | null {
     // Expose the current selection to UI layers (read-only).
     return this.selection; // Return the selected object (or null if none).
+  }
+
+  public getHover(): THREE.Object3D | null {
+    // Expose the current hovered object (used by UI for cursor feedback).
+    return this.hover; // Return the hovered object (or null if none).
   }
 
   public onSelectionChange(listener: SelectionChangeListener): () => void {
@@ -368,6 +377,7 @@ export class Editor {
 
     if (this.selection === object) return; // No-op if selection is unchanged.
     this.selection = object; // Store new selection.
+    this.clearHover(); // Clear hover highlight so we never show double outlines on the selected object.
 
     if (!this.selection) {
       // If selection is cleared...
@@ -385,6 +395,60 @@ export class Editor {
   public clearSelection(): void {
     // Convenience wrapper to clear selection state.
     this.select(null); // Delegate to select(null) so listeners/helper cleanup happen consistently.
+  }
+
+  public hoverAt(clientX: number, clientY: number): void {
+    // Raycast from a screen point and update hover state (no selection changes).
+    if (!this.modelRoot) {
+      // Without a model root, there is nothing to hover.
+      this.clearHover(); // Ensure hover helper is removed.
+      return; // Done.
+    }
+
+    if (this.isDraggingTransform) {
+      // While dragging the gizmo, we do not want hover highlights to flicker.
+      this.clearHover(); // Hide hover helper.
+      return; // Done.
+    }
+
+    const dom = this.viewer.getDomElement(); // The canvas element that receives pointer events.
+    const rect = dom.getBoundingClientRect(); // Read the canvas position/size in CSS pixels.
+    if (rect.width === 0 || rect.height === 0) return; // Guard against division by zero if canvas is collapsed.
+
+    this.pointerNdc.x = ((clientX - rect.left) / rect.width) * 2 - 1; // Convert to NDC X (-1 left, +1 right).
+    this.pointerNdc.y = -(((clientY - rect.top) / rect.height) * 2 - 1); // Convert to NDC Y (+1 top, -1 bottom).
+
+    this.raycaster.setFromCamera(this.pointerNdc, this.viewer.getCamera()); // Build a ray from camera through pointer.
+    const hits = this.raycaster.intersectObject(this.modelRoot, true); // Intersect only the model subtree (ignore helpers/gizmos).
+
+    const hit = hits[0]; // Take the closest hit.
+    const next = hit?.object ?? null; // Normalize to null when no hit.
+
+    if (!next) {
+      // If pointer is over empty space, clear hover.
+      this.clearHover(); // Hide hover helper.
+      return; // Done.
+    }
+
+    if (this.selection && next.uuid === this.selection.uuid) {
+      // Avoid drawing both hover and selection outlines on the same object (looks noisy).
+      this.clearHover(); // Selection outline already communicates focus.
+      return; // Done.
+    }
+
+    if (this.hover && this.hover.uuid === next.uuid) {
+      // If hover did not change, keep current helper (no extra work).
+      return; // Done.
+    }
+
+    this.hover = next; // Store new hover object.
+    this.ensureHoverHelper(next); // Create/retarget hover outline helper.
+  }
+
+  public clearHover(): void {
+    // Clear hover state and remove hover helper from the scene.
+    this.hover = null; // Clear reference so GC can collect old hovered object if needed.
+    this.disposeHoverHelper(); // Remove and dispose hover helper resources.
   }
 
   public pick(clientX: number, clientY: number): void {
@@ -415,14 +479,17 @@ export class Editor {
   public update(): void {
     // Per-frame update hook (called from Viewer tick).
     this.selectionHelper?.update(); // Keep the selection outline in sync with animated/skinned meshes.
+    this.hoverHelper?.update(); // Keep hover outline in sync with animated/skinned meshes.
   }
 
   public dispose(): void {
     // Dispose editor-owned helpers (useful if the app ever unmounts).
     this.disposeSelectionHelper(); // Free outline helper GPU resources.
+    this.disposeHoverHelper(); // Free hover helper GPU resources.
     this.viewer.getScene().remove(this.transformControls); // Remove gizmo from the scene graph.
     this.transformControls.dispose(); // Remove event listeners and dispose gizmo geometry/materials.
     this.selection = null; // Clear selection reference.
+    this.hover = null; // Clear hover reference.
     this.modelRoot = null; // Clear root reference.
     this.sourceFileName = null; // Clear stored filename.
     this.history.clear(); // Clear history to release closures referencing objects.
@@ -446,12 +513,34 @@ export class Editor {
     this.selectionHelper.setFromObject(target); // Retarget helper to the new object and recompute its bounding box.
   }
 
+  private ensureHoverHelper(target: THREE.Object3D): void {
+    // Create the hover BoxHelper if needed, or retarget it to a different object.
+    if (!this.hoverHelper) {
+      // If there is no hover helper yet, create it.
+      this.hoverHelper = new THREE.BoxHelper(target, 0x9aa5ce); // Use a muted color so selection remains dominant.
+      this.hoverHelper.renderOrder = 998; // Draw late, but still below the selection outline.
+      (this.hoverHelper.material as THREE.LineBasicMaterial).depthTest = false; // Disable depth test so outline is visible through geometry.
+      this.viewer.getScene().add(this.hoverHelper); // Add helper to the scene so it renders.
+      return; // Done.
+    }
+
+    this.hoverHelper.setFromObject(target); // Retarget helper to the new object and recompute bbox.
+  }
+
   private disposeSelectionHelper(): void {
     // Remove and dispose the selection outline helper.
     if (!this.selectionHelper) return; // Guard against double-dispose.
     this.viewer.getScene().remove(this.selectionHelper); // Remove from scene so it stops rendering.
     this.selectionHelper.dispose(); // Dispose helper geometry/material (BoxHelper provides a dispose() convenience).
     this.selectionHelper = null; // Clear reference so GC can collect the JS object.
+  }
+
+  private disposeHoverHelper(): void {
+    // Remove and dispose the hover outline helper.
+    if (!this.hoverHelper) return; // Guard against double-dispose.
+    this.viewer.getScene().remove(this.hoverHelper); // Remove from scene so it stops rendering.
+    this.hoverHelper.dispose(); // Dispose helper geometry/material.
+    this.hoverHelper = null; // Clear reference so GC can collect the JS object.
   }
 
   private syncTransformControls(): void {

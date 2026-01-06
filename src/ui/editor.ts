@@ -8,8 +8,17 @@
 
 import type * as THREE from "three"; // Import Three.js types for Object3D annotations (no runtime dependency here).
 import type { Editor } from "../core/editor/editor"; // Import Editor type (selection + root state).
+import type { Viewer } from "../core/viewer"; // Import Viewer type (used for framing from the Hierarchy context menu).
 
-export function initEditorUi(editor: Editor): void {
+type VisibleNode = {
+  // Flattened hierarchy node data used for simple DOM rendering.
+  object: THREE.Object3D; // The underlying Three.js object.
+  depth: number; // Depth in the tree (used for indentation).
+  hasChildren: boolean; // Whether the node has children (controls toggle visibility).
+  expanded: boolean; // Whether children are currently expanded (only relevant when `hasChildren` is true).
+};
+
+export function initEditorUi(viewer: Viewer, editor: Editor): void {
   // Public API: attach editor UI behavior to the existing DOM.
   const canvas = document.getElementById("c") as HTMLCanvasElement | null; // Find the viewport canvas used for rendering.
   if (!canvas) throw new Error("Canvas element not found."); // Fail fast if markup is out of sync with code.
@@ -20,7 +29,15 @@ export function initEditorUi(editor: Editor): void {
   let currentRoot: THREE.Object3D | null = null; // Track the current model root so we can render it.
   let currentFilter = ""; // Track the current search string from the input box.
 
+  const expanded = new Set<string>(); // Track which nodes are expanded by uuid (collapse/expand UX).
   const uuidToObject = new Map<string, THREE.Object3D>(); // Map rendered DOM rows back to real Object3D instances.
+  const contextMenu = createContextMenu(); // Singleton context menu instance for hierarchy rows.
+
+  const expandAll = (root: THREE.Object3D) => {
+    // Expand the entire tree by default so the hierarchy starts fully visible (Unity-like).
+    expanded.clear(); // Clear any previous expand state.
+    root.traverse((obj) => expanded.add(obj.uuid)); // Mark every node as expanded.
+  };
 
   const render = () => {
     // Rebuild the hierarchy DOM to reflect the current root/filter/selection.
@@ -37,30 +54,147 @@ export function initEditorUi(editor: Editor): void {
     }
 
     const selection = editor.getSelection(); // Read current selection so we can highlight the selected row.
-    const nodes = buildVisibleNodes(currentRoot, currentFilter); // Build a flat list of visible nodes with depth info.
+    const nodes = buildVisibleNodes(currentRoot, currentFilter, expanded); // Build a flat list of visible nodes with depth info.
 
-    for (const { object, depth } of nodes) {
+    for (const { object, depth, hasChildren, expanded: isExpanded } of nodes) {
       // Create one row per visible node.
       const row = document.createElement("div"); // Use a div for a simple clickable row.
       row.className = "tree-item"; // Base styling for hierarchy items.
       row.setAttribute("role", "treeitem"); // Improve accessibility semantics for assistive tech.
       row.dataset.uuid = object.uuid; // Store uuid so click handlers can map back to the object.
       row.style.paddingLeft = `${8 + depth * 14}px`; // Indent based on depth to visualize parent/child structure.
-      row.textContent = formatObjectLabel(object); // Show a user-friendly label (name or type).
+
+      // Collapse toggle (triangle).
+      const toggle = document.createElement("button"); // A button is keyboard-focusable by default.
+      toggle.type = "button"; // Explicit type avoids form-submit behavior if used inside a form.
+      toggle.className = "tree-toggle"; // Style hook.
+      toggle.textContent = hasChildren ? (isExpanded ? "▾" : "▸") : " "; // Triangle for parents, spacer for leaves.
+      toggle.disabled = !hasChildren; // Disable for leaves so it doesn't look interactive.
+      toggle.addEventListener("click", (e) => {
+        // Expand/collapse without selecting the node.
+        e.stopPropagation(); // Prevent row click selection.
+        if (!hasChildren) return; // Guard.
+        if (expanded.has(object.uuid)) expanded.delete(object.uuid); // Collapse.
+        else expanded.add(object.uuid); // Expand.
+        render(); // Re-render to reflect the new expand state.
+      });
+      row.appendChild(toggle); // Add toggle to row.
+
+      // Type icon (Mesh/Bone/Group).
+      const icon = document.createElement("span"); // Small badge-like icon.
+      const kind = getNodeKind(object); // Determine icon kind based on runtime flags.
+      icon.className = `tree-icon tree-icon-${kind}`; // Add kind-specific class for styling.
+      icon.textContent = kindToLabel(kind); // Use a short letter label (M/B/G/N).
+      row.appendChild(icon); // Add icon.
+
+      // Name label (flexes to fill).
+      const label = document.createElement("span"); // Separate label element so flex/ellipsis works with buttons.
+      label.className = "tree-label"; // Style hook.
+      label.textContent = formatObjectLabel(object); // Show a user-friendly label (name or type).
+      row.appendChild(label); // Add label.
+
+      // Visibility toggle (eye).
+      const eye = document.createElement("button"); // Button so it can be clicked independently from selection.
+      eye.type = "button"; // Explicit type.
+      eye.className = "tree-eye"; // Style hook.
+      eye.setAttribute("aria-label", "Toggle visibility"); // Accessibility label.
+      eye.innerHTML = object.visible ? EYE_OPEN_SVG : EYE_CLOSED_SVG; // Render an eye icon (open/closed).
+      eye.addEventListener("click", (e) => {
+        // Toggle visibility without changing selection.
+        e.stopPropagation(); // Prevent row click selection.
+        const before = object.visible; // Snapshot previous state for undo.
+        const after = !before; // Compute toggled state.
+        object.visible = after; // Apply immediately.
+        editor.pushCommand({
+          // Make visibility toggles undoable like other editor actions.
+          label: "Toggle Visibility",
+          undo: () => (object.visible = before),
+          redo: () => (object.visible = after),
+        });
+        if (selection && selection.uuid === object.uuid) editor.notifySelectionUpdated(); // Refresh inspector if this object is selected.
+        render(); // Re-render so the eye icon updates.
+      });
+      row.appendChild(eye); // Add eye toggle.
+
+      if (!object.visible) row.classList.add("is-hidden"); // Dim hidden nodes for clarity.
 
       if (selection && selection.uuid === object.uuid) {
         // If this row corresponds to the selected object...
         row.classList.add("is-selected"); // ...apply selected styling.
       }
 
+      row.addEventListener("contextmenu", (e) => {
+        // Right-click opens a Unity-like context menu.
+        e.preventDefault(); // Prevent browser menu.
+        e.stopPropagation(); // Don't trigger other handlers.
+        contextMenu.show(e.clientX, e.clientY, [
+          {
+            label: "Frame",
+            onClick: () => viewer.frameObject(object),
+          },
+          {
+            label: "Rename…",
+            onClick: () => {
+              const next = window.prompt("Rename object", object.name || formatObjectLabel(object)); // Simple prompt UX.
+              if (next === null) return; // Cancel.
+              const before = object.name; // Snapshot for undo.
+              object.name = next; // Apply rename.
+              editor.pushCommand({
+                label: "Rename",
+                undo: () => (object.name = before),
+                redo: () => (object.name = next),
+              });
+              if (selection && selection.uuid === object.uuid) editor.notifySelectionUpdated(); // Refresh inspector name.
+              render(); // Re-render to refresh label.
+            },
+          },
+          {
+            label: "Duplicate",
+            onClick: () => {
+              editor.select(object); // Context menu acts on the clicked node.
+              editor.duplicateSelection(); // Duplicate is implemented on selection (undoable).
+            },
+          },
+          {
+            label: "Delete",
+            danger: true,
+            onClick: () => {
+              editor.select(object); // Delete acts on the clicked node.
+              editor.deleteSelection(); // Delete is implemented on selection (undoable).
+            },
+          },
+        ]);
+      });
+
       uuidToObject.set(object.uuid, object); // Store uuid -> object mapping for click selection.
       tree.appendChild(row); // Add row to the DOM.
     }
   }; // End render function.
 
+  canvas.addEventListener("pointermove", (e) => {
+    // Moving the pointer in the viewport updates hover feedback (outline + cursor).
+    const isFlyLooking = viewer.isFlyEnabled() && (e.buttons & 2) !== 0; // In fly mode, RMB look is active while RMB is held.
+    if (e.altKey || isFlyLooking) {
+      // Unity-like camera navigation uses Alt and/or fly RMB look; suppress hover feedback while navigating.
+      editor.clearHover(); // Hide hover outline while orbiting/panning/dollying.
+      canvas.style.cursor = ""; // Restore default cursor.
+      return; // Done.
+    }
+
+    editor.hoverAt(e.clientX, e.clientY); // Update hover outline based on pointer position.
+    canvas.style.cursor = editor.getHover() ? "pointer" : ""; // Show a pointer cursor when an object is hoverable.
+  });
+
+  canvas.addEventListener("pointerleave", () => {
+    // When the pointer leaves the viewport, clear hover feedback.
+    editor.clearHover(); // Remove hover outline helper.
+    canvas.style.cursor = ""; // Restore default cursor.
+  });
+
   canvas.addEventListener("click", (e) => {
     // Clicking in the viewport performs raycast picking to select objects.
     if (e.button !== 0) return; // Only respond to left-click selection.
+    if (e.altKey) return; // Alt+click is reserved for Unity-like camera navigation, not selection.
     if (editor.isTransformDragging()) return; // Ignore clicks while the gizmo is mid-drag (prevents accidental selection clears).
     editor.pick(e.clientX, e.clientY); // Convert the click position into a raycast and update selection.
   });
@@ -84,6 +218,7 @@ export function initEditorUi(editor: Editor): void {
   editor.onRootChange((root) => {
     // Re-render the hierarchy list when a new model is loaded.
     currentRoot = root; // Store root reference (null clears the hierarchy).
+    if (currentRoot) expandAll(currentRoot); // Start expanded so hierarchy is immediately usable.
     render(); // Refresh UI immediately.
   });
 
@@ -98,6 +233,7 @@ export function initEditorUi(editor: Editor): void {
   });
 
   currentRoot = editor.getModelRoot(); // Initialize from current editor state (important if init order changes).
+  if (currentRoot) expandAll(currentRoot); // Ensure initial root is expanded on first render.
   render(); // Initial render so the panel is not empty on first paint.
 }
 
@@ -118,24 +254,139 @@ function formatObjectLabel(object: THREE.Object3D): string {
 function buildVisibleNodes(
   root: THREE.Object3D, // Root object we want to list.
   filter: string, // Search filter (case-insensitive substring match).
-): Array<{ object: THREE.Object3D; depth: number }> {
+  expanded: ReadonlySet<string>, // Expanded node uuids (used only when filter is empty).
+): VisibleNode[] {
   // Convert the object tree into a flat list so it is easy to render with indentation.
   const q = filter.trim().toLowerCase(); // Normalize filter so matching is case-insensitive.
+  const ignoreCollapse = q.length > 0; // While searching, ignore manual collapse so matches are always discoverable.
 
   const build = (
     object: THREE.Object3D, // Current node being visited.
     depth: number, // Current depth used for indentation.
-  ): Array<{ object: THREE.Object3D; depth: number }> => {
+  ): { rows: VisibleNode[]; visible: boolean } => {
     // Recursively build a pre-order list for a subtree, including parents of matching nodes.
     const label = formatObjectLabel(object).toLowerCase(); // Compute label used for filter matching.
     const selfMatches = q.length === 0 || label.includes(q); // The node matches when filter is empty or substring matches.
 
-    const children = object.children.flatMap((child) => build(child, depth + 1)); // Recursively build visible children first.
-    const visible = selfMatches || children.length > 0; // Include parent if it matches OR any descendant matches.
+    const childResults = object.children.map((child) => build(child, depth + 1)); // Recursively build children.
+    const anyChildVisible = childResults.some((r) => r.visible); // True if any descendant matches filter.
+    const visible = selfMatches || anyChildVisible; // Include parent if it matches OR any descendant matches.
 
-    if (!visible) return []; // If nothing matches in this subtree, return an empty list.
-    return [{ object, depth }, ...children]; // Pre-order list: parent row first, then children rows.
+    if (!visible) return { rows: [], visible: false }; // If nothing matches in this subtree, return empty.
+
+    const hasChildren = object.children.length > 0; // Used for the collapse toggle.
+    const isExpanded = ignoreCollapse || expanded.has(object.uuid); // Treat as expanded while searching.
+    const childRows = ignoreCollapse || isExpanded ? childResults.flatMap((r) => r.rows) : []; // Hide children when collapsed.
+
+    return {
+      // Pre-order list: parent row first, then (maybe) children rows.
+      rows: [{ object, depth, hasChildren, expanded: isExpanded }, ...childRows],
+      visible: true,
+    };
   };
 
-  return build(root, 0); // Build the visible list starting at depth 0.
+  return build(root, 0).rows; // Build the visible list starting at depth 0.
+}
+
+type NodeKind = "mesh" | "bone" | "group" | "node"; // Supported node kinds for hierarchy icons.
+
+function getNodeKind(object: THREE.Object3D): NodeKind {
+  // Determine a hierarchy icon kind based on common Three.js runtime flags.
+  if ((object as unknown as { isBone?: unknown }).isBone) return "bone"; // Bones.
+  if ((object as unknown as { isSkinnedMesh?: unknown }).isSkinnedMesh) return "mesh"; // SkinnedMesh is still a mesh.
+  if ((object as unknown as { isMesh?: unknown }).isMesh) return "mesh"; // Mesh.
+  if (object.type === "Group") return "group"; // Group nodes.
+  return "node"; // Fallback for other Object3D types.
+}
+
+function kindToLabel(kind: NodeKind): string {
+  // Return a compact label used inside the icon badge.
+  if (kind === "mesh") return "M"; // Mesh.
+  if (kind === "bone") return "B"; // Bone.
+  if (kind === "group") return "G"; // Group.
+  return "N"; // Generic node.
+}
+
+type ContextMenuItem = {
+  // One clickable entry in the context menu.
+  label: string; // Visible label.
+  danger?: boolean; // When true, render as a "danger" action (e.g., Delete).
+  onClick: () => void; // Action callback.
+};
+
+type ContextMenu = {
+  // Minimal imperative API to show/hide a menu.
+  show: (x: number, y: number, items: ContextMenuItem[]) => void; // Show menu at screen coords.
+  hide: () => void; // Hide menu.
+};
+
+const EYE_OPEN_SVG = `
+<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false">
+  <path fill="currentColor" d="M12 5c5.5 0 9.6 3.6 11 7-1.4 3.4-5.5 7-11 7S2.4 15.4 1 12c1.4-3.4 5.5-7 11-7Zm0 2C7.7 7 4.3 9.7 3.1 12 4.3 14.3 7.7 17 12 17s7.7-2.7 8.9-5C19.7 9.7 16.3 7 12 7Zm0 2.2A2.8 2.8 0 1 1 9.2 12 2.8 2.8 0 0 1 12 9.2Z"/>
+</svg>
+`.trim(); // Inline SVG icon for visible state.
+
+const EYE_CLOSED_SVG = `
+<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false">
+  <path fill="currentColor" d="M3.3 2 22 20.7l-1.3 1.3-3-3c-1.7.8-3.6 1.3-5.7 1.3-5.5 0-9.6-3.6-11-7 1-2.4 3.3-5 6.4-6.4L2 3.3 3.3 2Zm8.7 6c.8 0 1.5.2 2.1.5l-1.6 1.6a1.8 1.8 0 0 0-2.4 2.4L8.5 14A3.8 3.8 0 0 1 12 8Zm0-3c2.1 0 4 .5 5.7 1.3l-1.6 1.6A9 9 0 0 0 12 6.9c-4.3 0-7.7 2.7-8.9 5 1 2 3.5 4.2 6.7 4.8l-1.7 1.7C5.2 17.6 2.7 15.5 1 12c1.4-3.4 5.5-7 11-7Z"/>
+</svg>
+`.trim(); // Inline SVG icon for hidden state.
+
+function createContextMenu(): ContextMenu {
+  // Create a single DOM element-based context menu that can be reused for all rows.
+  const menu = document.createElement("div"); // Root menu element.
+  menu.className = "context-menu"; // CSS hook.
+  menu.hidden = true; // Hidden by default.
+  document.body.appendChild(menu); // Add to body so it can be positioned absolutely anywhere.
+
+  const hide = () => {
+    // Hide the menu.
+    menu.hidden = true; // Use hidden so it's removed from tab order.
+    menu.innerHTML = ""; // Clear buttons so stale handlers aren't retained.
+  };
+
+  window.addEventListener("pointerdown", (e) => {
+    // Click outside closes the menu (Unity-like).
+    const target = e.target as Node | null; // Read event target.
+    if (!target) return; // Guard.
+    if (menu.hidden) return; // Nothing to do if menu is already closed.
+    if (menu.contains(target)) return; // Clicking inside the menu should not close it before button click.
+    hide(); // Close on outside click.
+  });
+
+  window.addEventListener("keydown", (e) => {
+    // Escape closes the menu.
+    if (e.key === "Escape") hide(); // Close.
+  });
+
+  const show = (x: number, y: number, items: ContextMenuItem[]) => {
+    // Show the menu at screen coordinates and populate it with items.
+    menu.hidden = false; // Make visible.
+    menu.style.left = `${x}px`; // Position horizontally.
+    menu.style.top = `${y}px`; // Position vertically.
+    menu.innerHTML = ""; // Clear previous items.
+
+    for (const item of items) {
+      // Create a button per item.
+      const btn = document.createElement("button"); // Use buttons for keyboard accessibility.
+      btn.type = "button"; // Avoid form submit.
+      btn.className = item.danger ? "context-item is-danger" : "context-item"; // Style hook.
+      btn.textContent = item.label; // Visible label.
+      btn.addEventListener("click", () => {
+        // Click executes the action and closes the menu.
+        hide(); // Close first so action can open other UI (prompts, etc) without overlay.
+        item.onClick(); // Run action.
+      });
+      menu.appendChild(btn); // Add to menu.
+    }
+
+    // Keep the menu within the viewport if near the edges (simple clamp).
+    const rect = menu.getBoundingClientRect(); // Measure after content is inserted.
+    const maxX = window.innerWidth - rect.width - 6; // Small margin.
+    const maxY = window.innerHeight - rect.height - 6; // Small margin.
+    menu.style.left = `${Math.max(6, Math.min(x, maxX))}px`; // Clamp X.
+    menu.style.top = `${Math.max(6, Math.min(y, maxY))}px`; // Clamp Y.
+  };
+
+  return { show, hide }; // Return imperative API.
 }

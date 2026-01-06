@@ -15,6 +15,7 @@
 - `editor-phase-3`：TransformControls + Inspector + Scene 面板
 - `editor-phase-4`：Shortcuts + Undo/Redo + Export GLB（含 delete 可復原）
 - `editor-phase-5`：Editor polish（gizmo size、duplicate、更多鍵盤操作）
+- `editor-phase-6`：Unity-like 操作升級（Alt 相機、Fly/WASD、Hierarchy 右鍵、設定保存）
 
 ## 查詢 tags
 

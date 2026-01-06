@@ -13,6 +13,7 @@ import type { Editor } from "../core/editor/editor"; // Import Editor type (sele
 import { disposeObject3D } from "../core/dispose"; // Import disposal utility to prevent GPU memory leaks on reload.
 import type { Helpers } from "../core/helpers"; // Import Helpers type for debug toggles (grid/axes/skeleton/wireframe).
 import type { ModelLoader } from "../core/loader"; // Import ModelLoader type (handles .glb/.gltf local loading).
+import { updateDebugSettings } from "../core/settings"; // Import settings persistence helper for Debug toggles.
 import type { Viewer } from "../core/viewer"; // Import Viewer type (scene/camera/renderer/loop wrapper).
 
 export function initControls({
@@ -110,10 +111,7 @@ export function initControls({
       infoClips.textContent = String(stats.clips); // Display clip count.
 
       skeletonCheckbox.disabled = !stats.hasSkinnedMesh; // Only enable skeleton toggle if the model contains a SkinnedMesh.
-      if (!stats.hasSkinnedMesh) skeletonCheckbox.checked = false; // If it cannot be used, ensure it is unchecked.
-
       wireframeCheckbox.disabled = stats.meshes === 0; // Wireframe toggle only makes sense if there are meshes.
-      if (stats.meshes === 0) wireframeCheckbox.checked = false; // If it cannot be used, ensure it is unchecked.
 
       helpers.setGridVisible(gridCheckbox.checked); // Apply current grid toggle to the helper object.
       helpers.setAxesVisible(axesCheckbox.checked); // Apply current axes toggle to the helper object.
@@ -161,8 +159,6 @@ export function initControls({
 
       helpers.setModelRoot(null); // Clear model binding for helpers (removes skeleton helper, etc.).
       editor.setModelRoot(null); // Clear editor root so hierarchy/selection reset to empty state.
-      skeletonCheckbox.checked = false; // Reset skeleton checkbox.
-      wireframeCheckbox.checked = false; // Reset wireframe checkbox.
       skeletonCheckbox.disabled = true; // Disable skeleton toggle until a valid skinned model is loaded.
       wireframeCheckbox.disabled = true; // Disable wireframe toggle until a valid mesh model is loaded.
     }
@@ -294,18 +290,26 @@ export function initControls({
     });
   });
 
-  gridCheckbox.addEventListener("change", () =>
-    helpers.setGridVisible(gridCheckbox.checked), // Toggle grid visibility in the scene.
-  );
-  axesCheckbox.addEventListener("change", () =>
-    helpers.setAxesVisible(axesCheckbox.checked), // Toggle axes visibility in the scene.
-  );
-  skeletonCheckbox.addEventListener("change", () =>
-    helpers.setSkeletonVisible(skeletonCheckbox.checked), // Toggle skeleton visualization for the active model.
-  );
-  wireframeCheckbox.addEventListener("change", () =>
-    helpers.setWireframeEnabled(wireframeCheckbox.checked), // Toggle wireframe rendering for the active model.
-  );
+  gridCheckbox.addEventListener("change", () => {
+    // Persist and apply grid visibility.
+    helpers.setGridVisible(gridCheckbox.checked); // Toggle grid visibility in the scene.
+    updateDebugSettings({ grid: gridCheckbox.checked }); // Persist preference.
+  });
+  axesCheckbox.addEventListener("change", () => {
+    // Persist and apply axes visibility.
+    helpers.setAxesVisible(axesCheckbox.checked); // Toggle axes visibility in the scene.
+    updateDebugSettings({ axes: axesCheckbox.checked }); // Persist preference.
+  });
+  skeletonCheckbox.addEventListener("change", () => {
+    // Persist and apply skeleton helper visibility.
+    helpers.setSkeletonVisible(skeletonCheckbox.checked); // Toggle skeleton visualization for the active model.
+    updateDebugSettings({ skeleton: skeletonCheckbox.checked }); // Persist preference.
+  });
+  wireframeCheckbox.addEventListener("change", () => {
+    // Persist and apply wireframe rendering.
+    helpers.setWireframeEnabled(wireframeCheckbox.checked); // Toggle wireframe rendering for the active model.
+    updateDebugSettings({ wireframe: wireframeCheckbox.checked }); // Persist preference.
+  });
 
   rebuildClipOptions([], clipSelect); // Initialize clip dropdown with a "no clips" option.
   syncAnimUi(animator, {
@@ -319,10 +323,10 @@ export function initControls({
     loopCheckbox, // Loop checkbox.
   });
 
-  helpers.setGridVisible(true); // Ensure grid is visible by default.
-  helpers.setAxesVisible(true); // Ensure axes are visible by default.
-  skeletonCheckbox.checked = false; // Default: skeleton off.
-  wireframeCheckbox.checked = false; // Default: wireframe off.
+  helpers.setGridVisible(gridCheckbox.checked); // Apply initial grid state from DOM (which may be restored from settings).
+  helpers.setAxesVisible(axesCheckbox.checked); // Apply initial axes state from DOM (which may be restored from settings).
+  helpers.setSkeletonVisible(skeletonCheckbox.checked); // Apply initial skeleton desired state (no-op until a skinned model is loaded).
+  helpers.setWireframeEnabled(wireframeCheckbox.checked); // Apply initial wireframe state (stored even if no model is loaded yet).
   skeletonCheckbox.disabled = true; // Disable skeleton toggle until we know the model has a SkinnedMesh.
   wireframeCheckbox.disabled = true; // Disable wireframe toggle until we know the model has meshes.
 }

@@ -239,15 +239,16 @@ html, body { /* Make the page fill the viewport and match the app's dark theme. 
 } /* End .tree. */
 
 .tree-item { /* One selectable row in the hierarchy list. */
+  display: flex; /* Use flex so toggle/icon/label/eye can align like a tree row. */
+  align-items: center; /* Vertically center row contents. */
+  gap: 6px; /* Space between row widgets. */
   padding: 6px 8px; /* Clickable area padding. */
   border-radius: 10px; /* Rounded row corners. */
   border: 1px solid rgba(255, 255, 255, 0.08); /* Subtle border so rows are distinguishable. */
   background: rgba(255, 255, 255, 0.03); /* Slight fill so rows read as interactive. */
   cursor: pointer; /* Indicate clickability. */
   user-select: none; /* Prevent text selection when clicking quickly. */
-  overflow: hidden; /* Keep long names from breaking the layout. */
-  text-overflow: ellipsis; /* Show ellipsis when names are too long. */
-  white-space: nowrap; /* Keep names on one line. */
+  overflow: hidden; /* Keep contents inside the rounded row. */
 } /* End .tree-item. */
 
 .tree-item:hover { /* Hover feedback for hierarchy items. */
@@ -258,6 +259,120 @@ html, body { /* Make the page fill the viewport and match the app's dark theme. 
   border-color: rgba(122, 162, 247, 0.9); /* Accent border matches focus color. */
   background: rgba(122, 162, 247, 0.12); /* Soft accent fill. */
 } /* End .tree-item.is-selected. */
+
+.tree-item.is-hidden { /* Dim hidden nodes so visibility state is obvious. */
+  opacity: 0.65; /* Lower opacity to communicate hidden state. */
+} /* End .tree-item.is-hidden. */
+
+.tree-toggle { /* Collapse/expand toggle button (triangle). */
+  width: 18px; /* Fixed width so labels align. */
+  height: 18px; /* Fixed height for consistent hit target. */
+  display: inline-flex; /* Center the triangle glyph. */
+  align-items: center; /* Vertical center. */
+  justify-content: center; /* Horizontal center. */
+  background: transparent; /* Keep it subtle. */
+  color: rgba(255, 255, 255, 0.75); /* Slightly muted. */
+  border: none; /* No border so it looks like an inline control. */
+  border-radius: 6px; /* Small rounding for hover feel. */
+  cursor: pointer; /* Indicate clickability. */
+  padding: 0; /* Keep it compact. */
+} /* End .tree-toggle. */
+
+.tree-toggle:disabled { /* Toggle is disabled for leaf nodes. */
+  cursor: default; /* Not clickable. */
+  opacity: 0.35; /* Show as inactive. */
+} /* End .tree-toggle:disabled. */
+
+.tree-toggle:not(:disabled):hover { /* Hover highlight for interactive toggles. */
+  background: rgba(255, 255, 255, 0.08); /* Subtle hover fill. */
+} /* End .tree-toggle hover. */
+
+.tree-icon { /* Small badge icon that indicates node kind (Mesh/Bone/Group). */
+  width: 18px; /* Fixed size badge. */
+  height: 18px; /* Fixed size badge. */
+  display: inline-flex; /* Center content. */
+  align-items: center; /* Vertical center. */
+  justify-content: center; /* Horizontal center. */
+  border-radius: 6px; /* Rounded like other UI elements. */
+  font-size: 11px; /* Compact label size. */
+  font-weight: 700; /* Make letters readable. */
+  letter-spacing: 0.02em; /* Slight spacing for clarity. */
+  color: rgba(255, 255, 255, 0.85); /* Light text. */
+  background: rgba(255, 255, 255, 0.07); /* Neutral background by default. */
+  border: 1px solid rgba(255, 255, 255, 0.12); /* Subtle border. */
+} /* End .tree-icon. */
+
+.tree-icon-mesh { /* Mesh badge color. */
+  background: rgba(122, 162, 247, 0.14); /* Accent-tinted background. */
+  border-color: rgba(122, 162, 247, 0.28); /* Accent border. */
+} /* End .tree-icon-mesh. */
+
+.tree-icon-bone { /* Bone badge color. */
+  background: rgba(199, 156, 255, 0.14); /* Purple-ish tint. */
+  border-color: rgba(199, 156, 255, 0.28); /* Border tint. */
+} /* End .tree-icon-bone. */
+
+.tree-icon-group { /* Group badge color. */
+  background: rgba(124, 240, 193, 0.12); /* Green-ish tint. */
+  border-color: rgba(124, 240, 193, 0.22); /* Border tint. */
+} /* End .tree-icon-group. */
+
+.tree-label { /* The text label for the node. */
+  flex: 1; /* Take remaining space so the eye button stays aligned right. */
+  overflow: hidden; /* Allow ellipsis. */
+  text-overflow: ellipsis; /* Show ellipsis when too long. */
+  white-space: nowrap; /* Keep on one line. */
+} /* End .tree-label. */
+
+.tree-eye { /* Eye button to toggle Object3D.visible. */
+  width: 26px; /* Comfortable click target. */
+  height: 22px; /* Comfortable click target. */
+  display: inline-flex; /* Center SVG. */
+  align-items: center; /* Vertical center. */
+  justify-content: center; /* Horizontal center. */
+  border-radius: 8px; /* Rounded like other buttons. */
+  border: 1px solid rgba(255, 255, 255, 0.12); /* Subtle border. */
+  background: rgba(255, 255, 255, 0.05); /* Slight fill. */
+  color: rgba(255, 255, 255, 0.75); /* SVG uses currentColor. */
+  cursor: pointer; /* Indicate clickability. */
+  padding: 0; /* Keep compact. */
+} /* End .tree-eye. */
+
+.tree-eye:hover { /* Hover feedback for visibility button. */
+  background: rgba(255, 255, 255, 0.09); /* Slightly brighter on hover. */
+} /* End .tree-eye:hover. */
+
+.context-menu { /* Custom right-click menu for Hierarchy. */
+  position: fixed; /* Position in viewport coordinates. */
+  z-index: 10000; /* Above panels and canvas. */
+  display: grid; /* Stack menu items vertically. */
+  gap: 4px; /* Small gaps between items. */
+  padding: 8px; /* Inner padding. */
+  background: rgba(20, 24, 34, 0.98); /* Dark floating panel background. */
+  border: 1px solid rgba(255, 255, 255, 0.14); /* Subtle border like other panels. */
+  border-radius: 12px; /* Rounded corners. */
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.45); /* Lift above background. */
+  min-width: 160px; /* Minimum size so labels fit. */
+} /* End .context-menu. */
+
+.context-item { /* One context menu action button. */
+  text-align: left; /* Left-align labels like typical context menus. */
+  background: rgba(255, 255, 255, 0.04); /* Subtle button fill. */
+  color: rgba(255, 255, 255, 0.9); /* Readable text. */
+  border: 1px solid rgba(255, 255, 255, 0.12); /* Subtle border. */
+  border-radius: 10px; /* Rounded corners. */
+  padding: 8px 10px; /* Comfortable click target. */
+  cursor: pointer; /* Indicate clickability. */
+} /* End .context-item. */
+
+.context-item:hover { /* Hover feedback for context menu items. */
+  background: rgba(255, 255, 255, 0.08); /* Slightly brighter. */
+} /* End .context-item:hover. */
+
+.context-item.is-danger { /* Danger action (Delete) styling. */
+  border-color: rgba(255, 99, 99, 0.45); /* Red border. */
+  background: rgba(255, 99, 99, 0.10); /* Soft red fill. */
+} /* End .context-item.is-danger. */
 
 .btn.is-active { /* Active state for tool buttons (Select/Move/Rotate/Scale). */
   border-color: rgba(122, 162, 247, 0.9); /* Match the app accent color. */

@@ -3,6 +3,7 @@
 // It keeps UI sliders/color pickers synchronized with the current Three.js scene state.
 
 import type { Viewer } from "../core/viewer"; // Import Viewer type (owns scene background and lights).
+import { updateSceneSettings } from "../core/settings"; // Import settings persistence helper for Scene panel.
 
 export function initSceneUi(viewer: Viewer): void {
   // Public API: attach Scene panel behavior to the DOM.
@@ -17,6 +18,7 @@ export function initSceneUi(viewer: Viewer): void {
   bg.addEventListener("input", () => {
     // Update the Three.js scene background color as the user picks a color.
     viewer.setBackground(bg.value); // HTML color input returns a CSS hex string like "#rrggbb".
+    updateSceneSettings({ background: bg.value }); // Persist background color to localStorage.
   });
 
   dir.addEventListener("input", () => {
@@ -25,6 +27,7 @@ export function initSceneUi(viewer: Viewer): void {
     if (!Number.isFinite(value)) return; // Ignore invalid values.
     viewer.setKeyLightIntensity(value); // Apply intensity to directional light.
     dirValue.textContent = value.toFixed(2); // Update label to match slider value.
+    updateSceneSettings({ keyLightIntensity: value }); // Persist key light intensity.
   });
 
   hemi.addEventListener("input", () => {
@@ -33,6 +36,7 @@ export function initSceneUi(viewer: Viewer): void {
     if (!Number.isFinite(value)) return; // Ignore invalid values.
     viewer.setFillLightIntensity(value); // Apply intensity to hemisphere light.
     hemiValue.textContent = value.toFixed(2); // Update label to match slider value.
+    updateSceneSettings({ fillLightIntensity: value }); // Persist fill light intensity.
   });
 
   // Initialize UI values from Viewer so the panel reflects the real scene state.
@@ -51,4 +55,3 @@ function mustGetEl(id: string): HTMLElement {
   if (!el) throw new Error(`Missing element: #${id}`); // Throw a readable error if markup is missing.
   return el; // Return as non-null.
 }
-

@@ -27,6 +27,7 @@
 19. `18-export-glb.md`：匯出 GLB（GLTFExporter）
 20. `19-delete-and-safety.md`：Delete 的取捨與資源管理注意事項
 21. `20-editor-polish.md`：Editor phase-5（duplicate / gizmo size / keyboard transforms）
+22. `21-editor-unity-camera-hierarchy-settings.md`：Editor phase-6（Alt 相機 / Fly / Hierarchy 右鍵 / Settings）
 
 ## 如何對照程式碼
 建議你開兩個視窗：

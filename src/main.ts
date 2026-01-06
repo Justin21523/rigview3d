@@ -8,6 +8,7 @@ import { Animator } from "./core/animator"; // Import the animation controller (
 import { Editor } from "./core/editor/editor"; // Import the editor system (selection now; gizmos/undo/export later).
 import { Helpers } from "./core/helpers"; // Import debug helpers (grid/axes/skeleton/wireframe).
 import { ModelLoader } from "./core/loader"; // Import the GLB/GLTF loader for drag-and-drop files.
+import { getSettings } from "./core/settings"; // Import localStorage-backed settings (Tools/Scene/Debug persistence).
 import { Viewer } from "./core/viewer"; // Import the Three.js viewer (scene/camera/renderer/loop).
 import { initControls } from "./ui/controls"; // Import DOM wiring that binds buttons/inputs to core logic.
 import { initEditorUi } from "./ui/editor"; // Import editor UI wiring (hierarchy + click-to-select).
@@ -20,10 +21,18 @@ import { initToolUi } from "./ui/tools"; // Import Tools panel wiring (Select/Mo
 const canvas = document.getElementById("c") as HTMLCanvasElement | null; // Find the `<canvas id="c">` used for WebGL rendering.
 if (!canvas) throw new Error("Canvas element not found."); // Fail fast if the expected element is missing (prevents null errors later).
 
+const settings = getSettings(); // Load persisted user preferences (or defaults) before wiring UI.
+applyInitialSettingsToDom(settings); // Apply settings to DOM inputs so UI modules read the persisted values on init.
+
 const viewer = new Viewer(canvas); // Create the viewer, which owns WebGLRenderer + Scene + Camera + OrbitControls.
+viewer.setBackground(settings.scene.background); // Apply persisted background color.
+viewer.setKeyLightIntensity(settings.scene.keyLightIntensity); // Apply persisted key light intensity.
+viewer.setFillLightIntensity(settings.scene.fillLightIntensity); // Apply persisted fill light intensity.
+
 const helpers = new Helpers(viewer.getScene()); // Add debug helpers (grid/axes) to the viewer scene immediately.
 const animator = new Animator(); // Create the animator (initially idle until a model with clips is loaded).
 const editor = new Editor(viewer); // Create the editor (selection + hierarchy; later adds gizmos/undo/export).
+editor.setToolMode(settings.tools.toolMode); // Apply persisted tool mode (Select/Move/Rotate/Scale) before UI init.
 viewer.setOnTick((deltaSeconds) => {
   // Register a per-frame callback so non-render logic can advance with time.
   animator.update(deltaSeconds); // Advance AnimationMixer by the frame delta so clips can play smoothly.
@@ -34,9 +43,46 @@ viewer.start(); // Start the requestAnimationFrame loop (renders continuously).
 
 const loader = new ModelLoader(); // Create a loader instance for local drag-and-drop files.
 initControls({ viewer, loader, animator, helpers, editor }); // Wire the main UI controls to core systems.
-initEditorUi(editor); // Wire editor panels (Hierarchy) and viewport picking to the Editor instance.
-initToolUi(editor); // Wire the transform tool panel to TransformControls.
+initEditorUi(viewer, editor); // Wire editor panels (Hierarchy) and viewport picking to the Editor instance.
+initToolUi(viewer, editor); // Wire the transform tool panel and camera navigation toggles.
 initInspectorUi(editor); // Wire the Inspector panel to the current selection.
 initSceneUi(viewer); // Wire the Scene panel to background and lighting settings.
 initExportUi(editor, animator); // Wire Export panel to GLTFExporter using the current model and animation clips.
 initShortcuts(viewer, editor); // Register Unity-like keyboard shortcuts for common editor actions.
+
+function applyInitialSettingsToDom(settings: ReturnType<typeof getSettings>): void {
+  // Apply persisted settings to the existing DOM inputs before UI modules initialize.
+  //
+  // Why do this in `main.ts`?
+  // - It keeps the persistence layer independent from individual UI modules
+  // - It guarantees all init*Ui() functions read the same initial values
+  const dbgGrid = document.getElementById("dbg-grid") as HTMLInputElement | null; // Debug: grid checkbox.
+  const dbgAxes = document.getElementById("dbg-axes") as HTMLInputElement | null; // Debug: axes checkbox.
+  const dbgSkeleton = document.getElementById("dbg-skeleton") as HTMLInputElement | null; // Debug: skeleton checkbox.
+  const dbgWireframe = document.getElementById("dbg-wireframe") as HTMLInputElement | null; // Debug: wireframe checkbox.
+
+  if (dbgGrid) dbgGrid.checked = settings.debug.grid; // Restore grid toggle.
+  if (dbgAxes) dbgAxes.checked = settings.debug.axes; // Restore axes toggle.
+  if (dbgSkeleton) dbgSkeleton.checked = settings.debug.skeleton; // Restore skeleton desired state.
+  if (dbgWireframe) dbgWireframe.checked = settings.debug.wireframe; // Restore wireframe desired state.
+
+  const snapEnabled = document.getElementById("tool-snap-enabled") as HTMLInputElement | null; // Tools: snap checkbox.
+  const snapMove = document.getElementById("tool-snap-move") as HTMLInputElement | null; // Tools: move step.
+  const snapRotate = document.getElementById("tool-snap-rotate") as HTMLInputElement | null; // Tools: rotate step (deg).
+  const snapScale = document.getElementById("tool-snap-scale") as HTMLInputElement | null; // Tools: scale step.
+  const nudge = document.getElementById("tool-nudge") as HTMLInputElement | null; // Tools: keyboard nudge step.
+  const gizmoSize = document.getElementById("tool-gizmo-size") as HTMLInputElement | null; // Tools: gizmo size slider.
+  const localSpace = document.getElementById("tool-space-local") as HTMLInputElement | null; // Tools: local/world checkbox.
+  const flyEnabled = document.getElementById("tool-fly-enabled") as HTMLInputElement | null; // Tools: fly toggle.
+  const flySpeed = document.getElementById("tool-fly-speed") as HTMLInputElement | null; // Tools: fly speed slider.
+
+  if (snapEnabled) snapEnabled.checked = settings.tools.snapEnabled; // Restore snap toggle.
+  if (snapMove) snapMove.value = String(settings.tools.snapMove); // Restore move step.
+  if (snapRotate) snapRotate.value = String(settings.tools.snapRotateDeg); // Restore rotate step.
+  if (snapScale) snapScale.value = String(settings.tools.snapScale); // Restore scale step.
+  if (nudge) nudge.value = String(settings.tools.nudgeStep); // Restore nudge step.
+  if (gizmoSize) gizmoSize.value = String(settings.tools.gizmoSize); // Restore gizmo size.
+  if (localSpace) localSpace.checked = settings.tools.localSpace; // Restore local/world.
+  if (flyEnabled) flyEnabled.checked = settings.tools.flyEnabled; // Restore fly mode.
+  if (flySpeed) flySpeed.value = String(settings.tools.flySpeed); // Restore fly speed.
+}
