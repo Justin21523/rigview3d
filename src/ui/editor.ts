@@ -8,11 +8,13 @@
 
 import type * as THREE from "three"; // Import Three.js types for Object3D annotations (no runtime dependency here).
 import type { Editor } from "../core/editor/editor"; // Import Editor type (selection + root state).
+import { getSettings, updateHierarchySettings } from "../core/settings"; // Import persistence helpers for Hierarchy panel preferences.
 import type { Viewer } from "../core/viewer"; // Import Viewer type (used for framing from the Hierarchy context menu).
 
 type VisibleNode = {
   // Flattened hierarchy node data used for simple DOM rendering.
   object: THREE.Object3D; // The underlying Three.js object.
+  key: string; // Stable path key (used for expand/collapse persistence across reloads).
   depth: number; // Depth in the tree (used for indentation).
   hasChildren: boolean; // Whether the node has children (controls toggle visibility).
   expanded: boolean; // Whether children are currently expanded (only relevant when `hasChildren` is true).
@@ -43,24 +45,185 @@ export function initEditorUi(viewer: Viewer, editor: Editor): void {
   });
 
   const searchInput = mustGetEl("hierarchy-search") as HTMLInputElement; // Search box for filtering the hierarchy list.
+  const showBonesInput = mustGetEl("hierarchy-show-bones") as HTMLInputElement; // Checkbox that toggles Bone visibility in the hierarchy.
+  const showHelpersInput = mustGetEl("hierarchy-show-helpers") as HTMLInputElement; // Checkbox that toggles helper-like leaf nodes in the hierarchy.
   const tree = mustGetEl("hierarchy-tree"); // Container where hierarchy items will be rendered.
 
   let currentRoot: THREE.Object3D | null = null; // Track the current model root so we can render it.
   let currentFilter = ""; // Track the current search string from the input box.
 
-  const expanded = new Set<string>(); // Track which nodes are expanded by uuid (collapse/expand UX).
+  let showBones = showBonesInput.checked; // Track whether Bone nodes are visible (initialized from persisted DOM value).
+  let showHelpers = showHelpersInput.checked; // Track whether helper-like leaf nodes are visible (initialized from persisted DOM value).
+
+  const expandedKeys = new Set<string>(); // Track which nodes are expanded by stable path keys (persisted across reloads).
   const uuidToObject = new Map<string, THREE.Object3D>(); // Map rendered DOM rows back to real Object3D instances.
+  const uuidToStableKey = new Map<string, string>(); // Map uuid -> stable path key for selection reveal/scroll (includes hidden rows).
+  const uuidToRow = new Map<string, HTMLElement>(); // Map uuid -> row element for fast selection style updates.
   const contextMenu = createContextMenu(); // Singleton context menu instance for hierarchy rows.
 
-  const resetExpandState = () => {
-    // Start collapsed so large rigs don't explode into thousands of rows by default (beginner-friendly).
-    expanded.clear(); // Keep empty = everything collapsed until the user expands nodes.
+  const getAssetKey = () => editor.getSourceFileName() ?? "unknown"; // Compute a persistence key for the current asset.
+
+  const loadExpandStateForAsset = () => {
+    // Restore expand/collapse state for the currently loaded asset (if any).
+    expandedKeys.clear(); // Reset current memory state.
+    if (!currentRoot) return; // No model loaded => keep empty expand state.
+    const key = getAssetKey(); // Resolve asset key.
+    const saved = getSettings().hierarchy.expandedByAsset[key] ?? []; // Read saved expanded keys (or empty).
+    saved.forEach((k) => expandedKeys.add(k)); // Restore into the Set for O(1) lookups.
+  };
+
+  const persistExpandStateForAsset = () => {
+    // Persist the current expand/collapse state into settings (keyed by asset name).
+    const assetKey = getAssetKey(); // Resolve persistence key.
+    const current = getSettings(); // Read current settings snapshot.
+    const next = { ...current.hierarchy.expandedByAsset }; // Shallow copy so we can mutate safely.
+    if (expandedKeys.size === 0) delete next[assetKey]; // Keep storage small by removing empty entries.
+    else next[assetKey] = Array.from(expandedKeys); // Store expanded keys for this asset.
+    updateHierarchySettings({ expandedByAsset: next }); // Persist (coerceSettings caps size to avoid bloat).
+  };
+
+  const rebuildStableKeyMap = () => {
+    // Rebuild the uuid -> stable key map for the entire model tree (used for selection reveal).
+    uuidToStableKey.clear(); // Reset map for the current root.
+    if (!currentRoot) return; // No root => nothing to build.
+
+    const visit = (node: THREE.Object3D, key: string) => {
+      // Visit a node and assign a stable path key based on child indices.
+      uuidToStableKey.set(node.uuid, key); // Store mapping.
+      node.children.forEach((child, index) => visit(child, `${key}/${index}`)); // Recurse.
+    };
+
+    visit(currentRoot, "0"); // Root key is always "0" (single-root hierarchy).
+  };
+
+  const isBone = (object: THREE.Object3D): boolean =>
+    Boolean((object as unknown as { isBone?: unknown }).isBone); // Runtime flag for bones.
+
+  const isMesh = (object: THREE.Object3D): boolean =>
+    Boolean((object as unknown as { isMesh?: unknown }).isMesh); // Runtime flag for renderable meshes.
+
+  const isHelperLikeLeaf = (object: THREE.Object3D): boolean => {
+    // Treat leaf non-mesh/non-bone nodes as "helpers" (empties/markers) for filtering.
+    if (object.children.length > 0) return false; // Only leaf nodes qualify as helper-like.
+    if (isMesh(object)) return false; // Meshes are renderable and should not be treated as helpers.
+    if (isBone(object)) return false; // Bones are handled by the Bone filter.
+    return true; // Leaf non-mesh/non-bone => helper-like.
+  };
+
+  const shouldIncludeInHierarchy = (object: THREE.Object3D): boolean => {
+    // Apply user filters to decide whether a node should appear in the Hierarchy list.
+    if (!showBones && isBone(object)) return false; // Hide bones when the filter is off.
+    if (!showHelpers && isHelperLikeLeaf(object)) return false; // Hide helper-like leaf nodes when the filter is off.
+    return true; // Otherwise include.
+  };
+
+  const expandAll = (object: THREE.Object3D, key: string): void => {
+    // Expand this node and all visible descendants (respecting current filters).
+    const visit = (node: THREE.Object3D, nodeKey: string) => {
+      if (!shouldIncludeInHierarchy(node)) return; // Skip filtered-out nodes entirely.
+      const visibleChildren = node.children
+        .map((child, index) => ({ child, childKey: `${nodeKey}/${index}` })) // Build stable child keys.
+        .filter(({ child }) => shouldIncludeInHierarchy(child)); // Apply filters at the child level.
+      if (visibleChildren.length === 0) return; // Nothing to expand.
+      expandedKeys.add(nodeKey); // Mark this node as expanded.
+      visibleChildren.forEach(({ child, childKey }) => visit(child, childKey)); // Recurse.
+    };
+    visit(object, key); // Start recursion at the clicked node.
+  };
+
+  const collapseAll = (object: THREE.Object3D, key: string): void => {
+    // Collapse this node and all descendants (we remove keys regardless of filters).
+    const visit = (node: THREE.Object3D, nodeKey: string) => {
+      expandedKeys.delete(nodeKey); // Remove expand state for this node.
+      node.children.forEach((child, index) => visit(child, `${nodeKey}/${index}`)); // Recurse into all children.
+    };
+    visit(object, key); // Start recursion at the clicked node.
+  };
+
+  let lastSelection = new Set<string>(); // Track selection uuids so we can update row classes without full re-render.
+  let lastPrimaryUuid: string | null = null; // Track the last primary selection uuid (for `is-primary` class updates).
+
+  const applySelectionStyles = () => {
+    // Update selection highlighting in the existing DOM without rebuilding the whole tree.
+    const selected = editor.getSelectionAll(); // Read current multi-selection list.
+    const nextSelected = new Set<string>(selected.map((o) => o.uuid)); // Convert to a set for O(1) membership checks.
+
+    // Remove selection styles from rows that are no longer selected.
+    for (const uuid of lastSelection) {
+      if (nextSelected.has(uuid)) continue; // Still selected.
+      const row = uuidToRow.get(uuid); // Find row element.
+      if (!row) continue; // Row may be filtered out.
+      row.classList.remove("is-selected"); // Remove selection highlight.
+      row.classList.remove("is-primary"); // Also remove primary highlight if it was set.
+    }
+
+    // Apply selection styles for newly selected rows.
+    for (const uuid of nextSelected) {
+      if (lastSelection.has(uuid)) continue; // Already styled.
+      const row = uuidToRow.get(uuid); // Find row element.
+      if (!row) continue; // Row may be filtered out.
+      row.classList.add("is-selected"); // Highlight.
+    }
+
+    const primary = editor.getSelection(); // Primary selection (last selected).
+    const primaryUuid = primary?.uuid ?? null; // Normalize.
+
+    // Update primary highlight.
+    if (lastPrimaryUuid && lastPrimaryUuid !== primaryUuid) {
+      const row = uuidToRow.get(lastPrimaryUuid); // Find old primary row.
+      row?.classList.remove("is-primary"); // Remove old primary highlight.
+    }
+    if (primaryUuid) {
+      const row = uuidToRow.get(primaryUuid); // Find new primary row.
+      if (row) {
+        row.classList.add("is-selected"); // Primary is always selected.
+        row.classList.add("is-primary"); // Stronger highlight for primary.
+      }
+    }
+
+    lastSelection = nextSelected; // Store snapshot for next diff.
+    lastPrimaryUuid = primaryUuid; // Store primary.
+  };
+
+  const revealAndScrollPrimarySelection = (): boolean => {
+    // Ensure the primary selection is visible in the tree (auto-expand ancestors) and scroll it into view.
+    if (!currentRoot) return false; // No root => nothing to reveal.
+    if (currentFilter.trim().length > 0) return false; // While searching we already ignore collapse (no need to expand).
+    const selection = editor.getSelection(); // Primary selection.
+    if (!selection) return false; // Nothing selected.
+    const key = uuidToStableKey.get(selection.uuid); // Look up stable key for selection (works even when the row is collapsed).
+    if (!key) return false; // Selection may be filtered out (e.g., bones hidden).
+
+    const parts = key.split("/"); // Split key into path parts (indices).
+    let cursor = parts[0] ?? ""; // Start at root key.
+    let changed = false; // Track whether we expanded anything.
+    for (let i = 1; i < parts.length; i += 1) {
+      // Expand every ancestor so the row becomes visible.
+      if (!expandedKeys.has(cursor)) {
+        expandedKeys.add(cursor); // Expand ancestor.
+        changed = true; // Mark that we changed state.
+      }
+      cursor = `${cursor}/${parts[i]}`; // Advance to next ancestor key.
+    }
+
+    if (changed) {
+      // If we changed expand state, persist + re-render so the row exists in the DOM.
+      persistExpandStateForAsset(); // Persist expansion.
+      render(); // Rebuild the tree.
+      uuidToRow.get(selection.uuid)?.scrollIntoView({ block: "nearest" }); // Scroll after rows exist.
+      return true; // Caller should not do extra work.
+    }
+
+    // If the row already exists, just scroll it into view.
+    uuidToRow.get(selection.uuid)?.scrollIntoView({ block: "nearest" }); // Keep scrolling minimal (Unity-like).
+    return false; // No re-render was needed.
   };
 
   const render = () => {
     // Rebuild the hierarchy DOM to reflect the current root/filter/selection.
     tree.innerHTML = ""; // Clear existing rows (simple + predictable for this small tool).
     uuidToObject.clear(); // Clear the mapping because we'll rebuild it from scratch.
+    uuidToRow.clear(); // Clear uuid -> row map.
 
     if (!currentRoot) {
       // If no model is loaded, show an empty state message.
@@ -71,15 +234,20 @@ export function initEditorUi(viewer: Viewer, editor: Editor): void {
       return; // Done.
     }
 
-    const selection = editor.getSelection(); // Read current selection so we can highlight the selected row.
-    const nodes = buildVisibleNodes(currentRoot, currentFilter, expanded); // Build a flat list of visible nodes with depth info.
+    const nodes = buildVisibleNodes(currentRoot, currentFilter, expandedKeys, {
+      showBones,
+      showHelpers,
+    }); // Build a flat list of visible nodes with depth info.
 
-    for (const { object, depth, hasChildren, expanded: isExpanded } of nodes) {
+    const fragment = document.createDocumentFragment(); // Build rows off-DOM to reduce layout thrash for large hierarchies.
+
+    for (const { object, key, depth, hasChildren, expanded: isExpanded } of nodes) {
       // Create one row per visible node.
       const row = document.createElement("div"); // Use a div for a simple clickable row.
       row.className = "tree-item"; // Base styling for hierarchy items.
       row.setAttribute("role", "treeitem"); // Improve accessibility semantics for assistive tech.
       row.dataset.uuid = object.uuid; // Store uuid so click handlers can map back to the object.
+      row.dataset.key = key; // Store stable key so expand/collapse can be persisted across reloads.
       row.style.paddingLeft = `${8 + depth * 14}px`; // Indent based on depth to visualize parent/child structure.
 
       // Collapse toggle (triangle).
@@ -92,8 +260,9 @@ export function initEditorUi(viewer: Viewer, editor: Editor): void {
         // Expand/collapse without selecting the node.
         e.stopPropagation(); // Prevent row click selection.
         if (!hasChildren) return; // Guard.
-        if (expanded.has(object.uuid)) expanded.delete(object.uuid); // Collapse.
-        else expanded.add(object.uuid); // Expand.
+        if (expandedKeys.has(key)) expandedKeys.delete(key); // Collapse.
+        else expandedKeys.add(key); // Expand.
+        persistExpandStateForAsset(); // Persist expand/collapse state for this asset.
         render(); // Re-render to reflect the new expand state.
       });
       row.appendChild(toggle); // Add toggle to row.
@@ -136,9 +305,6 @@ export function initEditorUi(viewer: Viewer, editor: Editor): void {
 
       if (!object.visible) row.classList.add("is-hidden"); // Dim hidden nodes for clarity.
 
-      if (editor.isSelected(object)) row.classList.add("is-selected"); // Apply selected styling for any selected node (multi-selection).
-      if (selection && selection.uuid === object.uuid) row.classList.add("is-primary"); // Primary selection gets a stronger highlight.
-
       row.addEventListener("contextmenu", (e) => {
         // Right-click opens a Unity-like context menu.
         e.preventDefault(); // Prevent browser menu.
@@ -147,6 +313,37 @@ export function initEditorUi(viewer: Viewer, editor: Editor): void {
           {
             label: "Frame",
             onClick: () => viewer.frameObject(object),
+          },
+          {
+            label: object.visible ? "Hide" : "Show",
+            onClick: () => {
+              const before = object.visible; // Snapshot for undo.
+              const after = !before; // Toggle.
+              object.visible = after; // Apply immediately.
+              editor.pushCommand({
+                label: "Toggle Visibility",
+                undo: () => (object.visible = before),
+                redo: () => (object.visible = after),
+              });
+              if (editor.isSelected(object)) editor.notifySelectionUpdated(); // Refresh inspector if needed.
+              render(); // Refresh eye/icon state.
+            },
+          },
+          {
+            label: "Expand All",
+            onClick: () => {
+              expandAll(object, key); // Expand the subtree.
+              persistExpandStateForAsset(); // Persist state.
+              render(); // Re-render.
+            },
+          },
+          {
+            label: "Collapse All",
+            onClick: () => {
+              collapseAll(object, key); // Collapse the subtree.
+              persistExpandStateForAsset(); // Persist state.
+              render(); // Re-render.
+            },
           },
           {
             label: "Rename…",
@@ -183,8 +380,12 @@ export function initEditorUi(viewer: Viewer, editor: Editor): void {
       });
 
       uuidToObject.set(object.uuid, object); // Store uuid -> object mapping for click selection.
-      tree.appendChild(row); // Add row to the DOM.
+      uuidToRow.set(object.uuid, row); // Store uuid -> row for fast selection style updates.
+      fragment.appendChild(row); // Add row to the fragment.
     }
+
+    tree.appendChild(fragment); // Append all rows at once (faster for large trees).
+    applySelectionStyles(); // Ensure selection highlight updates without rebuilding the tree.
   }; // End render function.
 
   canvas.addEventListener("pointermove", (e) => {
@@ -246,6 +447,20 @@ export function initEditorUi(viewer: Viewer, editor: Editor): void {
     editor.select(object, { toggle: mouse.shiftKey }); // Replace selection by default; Shift toggles multi-selection membership.
   });
 
+  showBonesInput.addEventListener("change", () => {
+    // Persist and apply Bone visibility filtering in the hierarchy.
+    showBones = showBonesInput.checked; // Update local flag used by buildVisibleNodes().
+    updateHierarchySettings({ showBones }); // Persist preference.
+    render(); // Re-render so the tree reflects the new filter.
+  });
+
+  showHelpersInput.addEventListener("change", () => {
+    // Persist and apply helper-like node filtering in the hierarchy.
+    showHelpers = showHelpersInput.checked; // Update local flag.
+    updateHierarchySettings({ showHelpers }); // Persist preference.
+    render(); // Re-render.
+  });
+
   searchInput.addEventListener("input", () => {
     // Re-filter the hierarchy list as the user types.
     currentFilter = searchInput.value; // Store the latest filter string.
@@ -255,13 +470,17 @@ export function initEditorUi(viewer: Viewer, editor: Editor): void {
   editor.onRootChange((root) => {
     // Re-render the hierarchy list when a new model is loaded.
     currentRoot = root; // Store root reference (null clears the hierarchy).
-    resetExpandState(); // Collapse by default for large rigs.
+    rebuildStableKeyMap(); // Rebuild uuid -> stable key mapping for this model.
+    loadExpandStateForAsset(); // Restore expand/collapse state for this asset.
     render(); // Refresh UI immediately.
   });
 
   editor.onSelectionChange(() => {
-    // Re-render the hierarchy list when selection changes (updates selected highlight row).
-    render(); // Simple full re-render keeps behavior predictable for a learning project.
+    // Selection changes are frequent, so avoid full tree rebuilds.
+    if (revealAndScrollPrimarySelection()) return; // Auto-expand + render when needed.
+    applySelectionStyles(); // Otherwise just update row classes.
+    const selection = editor.getSelection(); // Primary selection (for scroll behavior).
+    if (selection) uuidToRow.get(selection.uuid)?.scrollIntoView({ block: "nearest" }); // Keep the selected row in view.
   });
 
   editor.onSelectionUpdated(() => {
@@ -270,7 +489,8 @@ export function initEditorUi(viewer: Viewer, editor: Editor): void {
   });
 
   currentRoot = editor.getModelRoot(); // Initialize from current editor state (important if init order changes).
-  resetExpandState(); // Keep collapsed by default.
+  rebuildStableKeyMap(); // Build stable key map for the initial root (if any).
+  loadExpandStateForAsset(); // Restore expand state (if any).
   render(); // Initial render so the panel is not empty on first paint.
 }
 
@@ -291,38 +511,68 @@ function formatObjectLabel(object: THREE.Object3D): string {
 function buildVisibleNodes(
   root: THREE.Object3D, // Root object we want to list.
   filter: string, // Search filter (case-insensitive substring match).
-  expanded: ReadonlySet<string>, // Expanded node uuids (used only when filter is empty).
+  expandedKeys: ReadonlySet<string>, // Expanded node stable keys (used only when filter is empty).
+  options: { showBones: boolean; showHelpers: boolean }, // Additional visibility filters for hierarchy usability.
 ): VisibleNode[] {
   // Convert the object tree into a flat list so it is easy to render with indentation.
   const q = filter.trim().toLowerCase(); // Normalize filter so matching is case-insensitive.
   const ignoreCollapse = q.length > 0; // While searching, ignore manual collapse so matches are always discoverable.
 
+  const isBone = (object: THREE.Object3D): boolean =>
+    Boolean((object as unknown as { isBone?: unknown }).isBone); // Bones.
+
+  const isMesh = (object: THREE.Object3D): boolean =>
+    Boolean((object as unknown as { isMesh?: unknown }).isMesh); // Meshes (SkinnedMesh is still a mesh).
+
+  const isHelperLikeLeaf = (object: THREE.Object3D): boolean => {
+    // Treat leaf non-mesh/non-bone nodes as "helpers" for filtering (empties/markers/cameras/lights).
+    if (object.children.length > 0) return false; // Only leaf nodes qualify.
+    if (isMesh(object)) return false; // Renderables are not helpers.
+    if (isBone(object)) return false; // Bones are controlled by a separate toggle.
+    return true; // Leaf non-mesh/non-bone => helper-like.
+  };
+
   const build = (
     object: THREE.Object3D, // Current node being visited.
+    key: string, // Stable path key for this node (based on child indices).
     depth: number, // Current depth used for indentation.
   ): { rows: VisibleNode[]; visible: boolean } => {
     // Recursively build a pre-order list for a subtree, including parents of matching nodes.
-    const label = formatObjectLabel(object).toLowerCase(); // Compute label used for filter matching.
-    const selfMatches = q.length === 0 || label.includes(q); // The node matches when filter is empty or substring matches.
+    const isRoot = key === "0"; // Root is always visible so the tree never becomes empty for bone-rooted rigs.
+    const boneHidden = !isRoot && isBone(object) && !options.showBones; // Hide bone rows when the toggle is off.
+    const helperHidden = !options.showHelpers && isHelperLikeLeaf(object); // Hide helper-like leaf rows when the toggle is off.
+    if (helperHidden) return { rows: [], visible: false }; // Helper leaf nodes have no children, so we can drop the subtree.
 
-    const childResults = object.children.map((child) => build(child, depth + 1)); // Recursively build children.
-    const anyChildVisible = childResults.some((r) => r.visible); // True if any descendant matches filter.
+    const label = formatObjectLabel(object).toLowerCase(); // Compute label used for filter matching.
+    const selfMatches = boneHidden ? false : q.length === 0 || label.includes(q); // Hidden bone rows never count as matches.
+
+    const childDepth = boneHidden ? depth : depth + 1; // Hidden bone rows are "transparent" so children keep the same depth.
+    const childResults = object.children.map((child, index) =>
+      build(child, `${key}/${index}`, childDepth),
+    ); // Recursively build children with stable keys.
+    const visibleChildren = childResults.filter((r) => r.visible); // Keep only visible children (others are filtered out).
+    const anyChildVisible = visibleChildren.length > 0; // True if any descendant matches filter.
     const visible = selfMatches || anyChildVisible; // Include parent if it matches OR any descendant matches.
 
     if (!visible) return { rows: [], visible: false }; // If nothing matches in this subtree, return empty.
 
-    const hasChildren = object.children.length > 0; // Used for the collapse toggle.
-    const isExpanded = ignoreCollapse || expanded.has(object.uuid); // Treat as expanded while searching.
-    const childRows = ignoreCollapse || isExpanded ? childResults.flatMap((r) => r.rows) : []; // Hide children when collapsed.
+    const hasChildren = anyChildVisible; // Only count children that are actually visible under current filters.
+    const isExpanded = ignoreCollapse || expandedKeys.has(key); // Treat as expanded while searching.
+    const childRows = ignoreCollapse || isExpanded ? visibleChildren.flatMap((r) => r.rows) : []; // Hide children when collapsed.
+
+    if (boneHidden) {
+      // Bone filtering: don't render bone rows, but keep visible descendants reachable.
+      return { rows: childRows, visible: anyChildVisible }; // Bone rows are only "visible" when they have visible descendants.
+    }
 
     return {
       // Pre-order list: parent row first, then (maybe) children rows.
-      rows: [{ object, depth, hasChildren, expanded: isExpanded }, ...childRows],
+      rows: [{ object, key, depth, hasChildren, expanded: isExpanded }, ...childRows],
       visible: true,
     };
   };
 
-  return build(root, 0).rows; // Build the visible list starting at depth 0.
+  return build(root, "0", 0).rows; // Build the visible list starting at depth 0 with a stable root key.
 }
 
 type NodeKind = "mesh" | "bone" | "group" | "node"; // Supported node kinds for hierarchy icons.

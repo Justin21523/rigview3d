@@ -44,6 +44,16 @@
           <section class="panel"> <!-- Panel: hierarchy (scene graph) like Unity Hierarchy. -->
             <h2 class="panel-title">Hierarchy</h2> <!-- Panel heading. -->
             <input id="hierarchy-search" class="text-input" type="text" placeholder="Search…" /> <!-- Search filter for the hierarchy list. -->
+            <div class="panel-chips" aria-label="Hierarchy filters"> <!-- Small filter chips to reduce noise in large rigs. -->
+              <label class="axis-chip"> <!-- Chip-like checkbox for bone visibility in the hierarchy. -->
+                <input id="hierarchy-show-bones" type="checkbox" /> <!-- When checked, show Bone nodes. -->
+                <span>Bones</span> <!-- Chip label. -->
+              </label> <!-- End bones chip. -->
+              <label class="axis-chip"> <!-- Chip-like checkbox for helper-like leaf nodes. -->
+                <input id="hierarchy-show-helpers" type="checkbox" /> <!-- When checked, show leaf "empty/helper" nodes. -->
+                <span>Helpers</span> <!-- Chip label. -->
+              </label> <!-- End helpers chip. -->
+            </div> <!-- End hierarchy filter chips. -->
             <div id="hierarchy-tree" class="tree" role="tree" aria-label="Scene hierarchy"></div> <!-- Container where we render the model tree. -->
           </section> <!-- End Hierarchy panel. -->
 

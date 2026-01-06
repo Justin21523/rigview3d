@@ -45,11 +45,18 @@ export type DebugSettings = {
   wireframe: boolean; // Wireframe toggle (applies only when the loaded model has meshes).
 };
 
+export type HierarchySettings = {
+  showBones: boolean; // When true, include Bone nodes in the Hierarchy panel.
+  showHelpers: boolean; // When true, include helper-like leaf nodes (non-mesh/non-bone) in the Hierarchy panel.
+  expandedByAsset: Record<string, string[]>; // Persisted expand/collapse state keyed by source filename.
+};
+
 export type AppSettingsV1 = {
   version: 1; // Schema version. Increment when the shape changes.
   tools: ToolsSettings; // Tools panel preferences.
   scene: SceneSettings; // Scene panel preferences.
   debug: DebugSettings; // Debug panel preferences.
+  hierarchy: HierarchySettings; // Hierarchy panel preferences.
 };
 
 const STORAGE_KEY = "rigview3d.settings"; // Single localStorage key for the whole app (easy to version/migrate).
@@ -84,6 +91,11 @@ const DEFAULT_SETTINGS: AppSettingsV1 = {
     axes: true,
     skeleton: false,
     wireframe: false,
+  },
+  hierarchy: {
+    showBones: false,
+    showHelpers: false,
+    expandedByAsset: {},
   },
 };
 
@@ -121,6 +133,16 @@ export function updateDebugSettings(patch: Partial<DebugSettings>): AppSettingsV
   const next = coerceSettings({
     ...current,
     debug: { ...current.debug, ...patch },
+  }); // Merge patch then coerce.
+  return setSettings(next); // Persist and return.
+}
+
+export function updateHierarchySettings(patch: Partial<HierarchySettings>): AppSettingsV1 {
+  // Update the Hierarchy section and persist it.
+  const current = getSettings(); // Read current cached settings.
+  const next = coerceSettings({
+    ...current,
+    hierarchy: { ...current.hierarchy, ...patch },
   }); // Merge patch then coerce.
   return setSettings(next); // Persist and return.
 }
@@ -192,6 +214,14 @@ function coerceSettings(value: unknown): AppSettingsV1 {
   base.debug.skeleton = coerceBool(debug.skeleton, base.debug.skeleton); // Skeleton toggle.
   base.debug.wireframe = coerceBool(debug.wireframe, base.debug.wireframe); // Wireframe toggle.
 
+  const hierarchy = (obj.hierarchy ?? {}) as Record<string, unknown>; // Read hierarchy section.
+  base.hierarchy.showBones = coerceBool(hierarchy.showBones, base.hierarchy.showBones); // Bone visibility in hierarchy.
+  base.hierarchy.showHelpers = coerceBool(hierarchy.showHelpers, base.hierarchy.showHelpers); // Helper-like leaf visibility in hierarchy.
+  base.hierarchy.expandedByAsset = coerceExpandedByAsset(
+    hierarchy.expandedByAsset,
+    base.hierarchy.expandedByAsset,
+  ); // Expand/collapse persistence.
+
   return base; // Return a fully valid settings object.
 }
 
@@ -226,4 +256,42 @@ function coerceColorHex(value: unknown, fallback: string): string {
   const v = value.trim(); // Remove surrounding whitespace.
   if (/^#[0-9a-fA-F]{6}$/.test(v)) return v; // Accept exactly 6-digit hex.
   return fallback; // Fall back for invalid formats.
+}
+
+function coerceExpandedByAsset(
+  value: unknown,
+  fallback: Record<string, string[]>,
+): Record<string, string[]> {
+  // Convert an unknown value into a safe `{ [assetKey]: string[] }` map.
+  //
+  // We keep this intentionally conservative:
+  // - only plain objects are accepted
+  // - only arrays of strings are accepted
+  // - we cap per-asset list size and number of assets to avoid localStorage bloat
+  if (!value || typeof value !== "object") return fallback; // Non-objects cannot be valid maps.
+  const obj = value as Record<string, unknown>; // Treat as a plain object.
+
+  const result: Record<string, string[]> = {}; // Build a fresh map (avoid keeping unknown references).
+  const assetKeys = Object.keys(obj).slice(0, 10); // Cap number of remembered assets.
+
+  for (const assetKey of assetKeys) {
+    const list = obj[assetKey]; // Read list for this asset.
+    if (!Array.isArray(list)) continue; // Ignore non-arrays.
+
+    const strings = list
+      .filter((v): v is string => typeof v === "string")
+      .slice(0, 2_000); // Cap list size to avoid huge payloads.
+
+    const deduped: string[] = []; // Preserve order while deduplicating.
+    const seen = new Set<string>(); // Track seen keys.
+    for (const s of strings) {
+      if (seen.has(s)) continue; // Skip duplicates.
+      seen.add(s); // Mark as seen.
+      deduped.push(s); // Keep.
+    }
+
+    result[assetKey] = deduped; // Store.
+  }
+
+  return result; // Return coerced map.
 }

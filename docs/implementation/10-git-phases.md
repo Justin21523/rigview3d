@@ -21,6 +21,7 @@
 - `editor-phase-9`：互動穩定性提升（選取/相機不互相打架 + gizmo 拖曳後不再卡死）
 - `editor-phase-10`：Transform 工作流補強（Shift 多選 + 群組 gizmo + Pivot/Center + X/Y/Z 軸鎖 + Inspector 多選狀態）
 - `editor-phase-11`：Animation timeline（scrub + current time + range start/end + clip crossfade）
+- `editor-phase-12`：Hierarchy 可用性深化（Bones/Helpers filter + expand state persistence + selection/perf 改善）
 
 ## 查詢 tags
 

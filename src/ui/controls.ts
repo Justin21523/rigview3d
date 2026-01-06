@@ -92,8 +92,8 @@ export function initControls({
       viewer.getScene().add(currentModelRoot); // Add the new model to the scene so it renders.
       viewer.frameObject(currentModelRoot); // Auto-frame the model so it fits in the viewport.
 
+      editor.setSourceFileName(result.fileName); // Store original filename so Hierarchy/Export can key persistence and propose a friendly output name.
       editor.setModelRoot(currentModelRoot); // Tell the editor about the new active model so hierarchy/selection stay in sync.
-      editor.setSourceFileName(result.fileName); // Store original filename so Export can propose a friendly output name.
       helpers.setModelRoot(currentModelRoot); // Tell helpers about the new model (skeleton/wireframe operate on the active root).
       editor.select(currentModelRoot); // Convenience: select the model root so gizmos affect the whole character by default.
       if (editor.getToolMode() === "select") editor.setToolMode("move"); // Convenience: show the Move gizmo immediately after load.

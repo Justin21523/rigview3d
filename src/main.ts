@@ -67,6 +67,12 @@ function applyInitialSettingsToDom(settings: ReturnType<typeof getSettings>): vo
   if (dbgSkeleton) dbgSkeleton.checked = settings.debug.skeleton; // Restore skeleton desired state.
   if (dbgWireframe) dbgWireframe.checked = settings.debug.wireframe; // Restore wireframe desired state.
 
+  const hierarchyBones = document.getElementById("hierarchy-show-bones") as HTMLInputElement | null; // Hierarchy: show bones filter.
+  const hierarchyHelpers = document.getElementById("hierarchy-show-helpers") as HTMLInputElement | null; // Hierarchy: show helpers filter.
+
+  if (hierarchyBones) hierarchyBones.checked = settings.hierarchy.showBones; // Restore "show bones" preference.
+  if (hierarchyHelpers) hierarchyHelpers.checked = settings.hierarchy.showHelpers; // Restore "show helpers" preference.
+
   const snapEnabled = document.getElementById("tool-snap-enabled") as HTMLInputElement | null; // Tools: snap checkbox.
   const snapMove = document.getElementById("tool-snap-move") as HTMLInputElement | null; // Tools: move step.
   const snapRotate = document.getElementById("tool-snap-rotate") as HTMLInputElement | null; // Tools: rotate step (deg).

@@ -414,6 +414,14 @@ html, body { /* Make the page fill the viewport and match the app's dark theme. 
   user-select: none; /* Prevent accidental text selection while clicking. */
 } /* End .checkbox. */
 
+.panel-chips { /* Small chip row used for compact toggles inside panels (e.g., Hierarchy filters). */
+  display: flex; /* Lay chips out horizontally. */
+  flex-wrap: wrap; /* Allow wrapping on narrow sidebars. */
+  gap: 8px; /* Space between chips. */
+  margin-top: 10px; /* Space below the input above (e.g., search box). */
+  margin-bottom: 6px; /* Small separation before long lists (e.g., the tree). */
+} /* End .panel-chips. */
+
 .axis-toggles { /* Compact axis toggles used to enable/disable TransformControls axes. */
   display: flex; /* Lay out X/Y/Z chips horizontally. */
   gap: 8px; /* Space between chips. */
