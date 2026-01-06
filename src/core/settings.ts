@@ -22,7 +22,7 @@ export type ToolsSettings = {
   nudgeStep: number; // Arrow-key nudge step.
   gizmoSize: number; // TransformControls visual size multiplier.
   localSpace: boolean; // True = local space, false = world space.
-  unityAltOrbit: boolean; // When true, orbit/pan/dolly require holding Alt (Unity-like navigation).
+  unityAltOrbit: boolean; // When true, use an editor-friendly orbit mapping (MMB pan / RMB dolly).
   flyEnabled: boolean; // Fly mode toggle.
   flySpeed: number; // Fly movement speed in world units/second.
 };

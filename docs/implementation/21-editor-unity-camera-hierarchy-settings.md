@@ -1,9 +1,9 @@
-# 21 — Unity-like 操作升級：Alt 相機、Fly/WASD、Hierarchy 右鍵、設定保存
+# 21 — Editor 操作升級：相機滑鼠 mapping、Fly/WASD、Hierarchy 右鍵、設定保存
 
 這一階段的重點是讓 RigView3D 的「操作手感」更接近 Unity Scene View / Hierarchy：
 
 - Viewport：滑鼠移到物件上會有 hover outline（不必先選到才知道你指到哪）。
-- Camera：改成 Unity 常見的 Alt 操作（Alt+LMB orbit / Alt+MMB pan / Alt+RMB dolly），並加入可切換的 Fly/WASD 模式。
+- Camera：提供編輯器常見的滑鼠操作（LMB orbit / MMB pan / RMB dolly）並加入可切換的 Fly/WASD 模式。
 - Hierarchy：可展開/收合、節點圖示（Mesh/Bone/Group）、眼睛顯示/隱藏、右鍵選單（Frame/Rename/Duplicate/Delete）。
 - Settings：Tools/Scene/Debug 的狀態會存到 localStorage，重開不必重設（含 version + defaults）。
 
@@ -23,17 +23,17 @@
 
 ---
 
-## 2) Unity-like Camera：Alt 導航 + Fly/WASD
+## 2) Camera：滑鼠操作 mapping + Fly/WASD
 
 對應程式：
 - `src/core/viewer.ts`
 
-### Alt+mouse 的做法（OrbitControls 不改原始碼也能做到）
+### Mouse mapping（OrbitControls 不改原始碼也能做到）
 OrbitControls 的行為由 `controls.mouseButtons` 決定。這個欄位會在 `mousedown` 時決定「這次拖曳要做 ROTATE/PAN/DOLLY」。
 
-所以我們做兩種 mapping：
-- **Alt 沒按**：把 `LEFT/MIDDLE/RIGHT` 全部設成 `-1`，等於「拖曳不做任何事」（但滑鼠滾輪 zoom 仍可用）。
-- **Alt 按住**：設成 `Alt+LMB orbit / Alt+MMB pan / Alt+RMB dolly`。
+本專案提供一個 Tools → Camera 的開關，切換兩種常見手感：
+- **Editor mapping（預設）**：LMB orbit / MMB pan / RMB dolly
+- **OrbitControls 預設**：LMB orbit / MMB dolly / RMB pan
 
 ### Fly/WASD（像 Unity RMB+WASD）
 Fly 模式下：
@@ -73,4 +73,3 @@ Fly 模式下：
 - 把 Hierarchy 的展開狀態也存到 settings（localStorage）。
 - Fly 模式加上「速度滑鼠滾輪調整」或「Shift+滾輪加減 speed」。
 - 把 Hierarchy 的 visibility toggle 跟 Inspector 的 Visible checkbox 做雙向同步（現在主要靠 `notifySelectionUpdated()`）。
-

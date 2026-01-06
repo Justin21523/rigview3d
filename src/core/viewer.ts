@@ -23,11 +23,10 @@ export class Viewer {
   private readonly clock = new THREE.Clock(); // Clock provides delta time between frames (useful for animation).
   private onTick: ((deltaSeconds: number) => void) | null = null; // Optional callback invoked once per frame.
 
-  // Orbit control gating (Unity-like): only orbit/pan/dolly on Alt + mouse buttons.
+  // Orbit control mapping: choose a mouse-button scheme for orbit/pan/dolly.
   private orbitEnabledByCameraMode = true; // Whether orbit controls are allowed by the current camera mode (disabled in Fly mode).
   private orbitEnabledByExternal = true; // Whether orbit controls are allowed by external systems (e.g., TransformControls dragging).
-  private altDown = false; // Track whether Alt is currently held (used to enable orbit mouse buttons).
-  private unityAltOrbitEnabled = true; // Toggle for Unity-like Alt+mouse navigation behavior.
+  private unityAltOrbitEnabled = true; // Toggle for an editor-friendly mouse mapping (MMB pan / RMB dolly).
 
   // Fly camera (Unity-like): RMB look + WASD/QE move.
   private flyEnabled = false; // When true, the camera can be driven in "fly" mode (instead of orbiting a target).
@@ -140,13 +139,13 @@ export class Viewer {
   }
 
   public setUnityAltOrbitEnabled(enabled: boolean): void {
-    // Enable/disable the Unity-like "Alt + mouse" orbit behavior.
+    // Enable/disable an editor-friendly orbit mouse mapping (MMB pan / RMB dolly).
     this.unityAltOrbitEnabled = enabled; // Store preference.
     this.applyOrbitMouseButtons(); // Update OrbitControls mouse mappings immediately.
   }
 
   public isUnityAltOrbitEnabled(): boolean {
-    // Return whether Unity-like Alt orbit is enabled.
+    // Return whether editor-friendly orbit mapping is enabled.
     return this.unityAltOrbitEnabled; // Expose internal flag.
   }
 
@@ -238,9 +237,9 @@ export class Viewer {
   }
 
   private attachInputHandlers(): void {
-    // Attach window/canvas listeners for camera navigation (Alt orbit + Fly mode).
-    window.addEventListener("keydown", this.handleKeyDown); // Track Alt and fly keys.
-    window.addEventListener("keyup", this.handleKeyUp); // Track Alt and fly keys.
+    // Attach window/canvas listeners for camera navigation (Fly mode) and viewport UX.
+    window.addEventListener("keydown", this.handleKeyDown); // Track fly movement keys while fly mode is enabled.
+    window.addEventListener("keyup", this.handleKeyUp); // Track fly movement keys while fly mode is enabled.
     window.addEventListener("blur", this.handleBlur); // Clear stuck modifier keys when the tab loses focus.
 
     const dom = this.getDomElement(); // Canvas element used for pointer events.
@@ -252,13 +251,6 @@ export class Viewer {
 
   private onKeyDown(e: KeyboardEvent): void {
     // Track modifier keys and fly movement keys.
-    if (e.key === "Alt") {
-      // Alt toggles orbit/pan/dolly when Unity-like orbit is enabled.
-      this.altDown = true; // Mark Alt as held.
-      this.applyOrbitMouseButtons(); // Enable OrbitControls mouse actions while Alt is down.
-      return; // Done.
-    }
-
     if (!this.flyEnabled) return; // Ignore fly keys when fly mode is off.
 
     const key = e.key.toLowerCase(); // Normalize to lowercase so "W" and "w" behave the same.
@@ -273,13 +265,6 @@ export class Viewer {
 
   private onKeyUp(e: KeyboardEvent): void {
     // Track key releases for modifier and fly movement keys.
-    if (e.key === "Alt") {
-      // Releasing Alt disables orbit/pan/dolly mouse actions again.
-      this.altDown = false; // Mark Alt as released.
-      this.applyOrbitMouseButtons(); // Disable OrbitControls mouse actions when Alt is not held.
-      return; // Done.
-    }
-
     if (!this.flyEnabled) return; // Ignore fly keys when fly mode is off.
 
     const key = e.key.toLowerCase(); // Normalize.
@@ -293,9 +278,8 @@ export class Viewer {
   }
 
   private onWindowBlur(): void {
-    // Clear modifier keys when focus is lost so the app doesn't get "stuck" in Alt or Fly.
-    this.altDown = false; // Clear Alt state.
-    this.applyOrbitMouseButtons(); // Restore OrbitControls mouse mapping for non-Alt.
+    // Clear modifier keys when focus is lost so the app doesn't get "stuck" in Fly.
+    this.applyOrbitMouseButtons(); // Restore OrbitControls mouse mapping (Fly may have changed pointer capture state).
     this.flyKey.forward = false; // Clear fly keys.
     this.flyKey.backward = false; // Clear fly keys.
     this.flyKey.left = false; // Clear fly keys.
@@ -369,16 +353,7 @@ export class Viewer {
   }
 
   private applyOrbitMouseButtons(): void {
-    // Apply Unity-like Alt gating to OrbitControls mouse button mappings.
-    if (!this.unityAltOrbitEnabled) {
-      // If Unity gating is disabled, restore OrbitControls default mouse mapping.
-      this.controls.mouseButtons = {
-        LEFT: THREE.MOUSE.ROTATE, // LMB rotate.
-        MIDDLE: THREE.MOUSE.DOLLY, // MMB dolly.
-        RIGHT: THREE.MOUSE.PAN, // RMB pan.
-      };
-      return; // Done.
-    }
+    // Apply a mouse-button mapping to OrbitControls.
     if (this.flyEnabled) {
       // Fly mode does not use orbit controls mouse buttons at all.
       this.controls.mouseButtons = {
@@ -389,21 +364,21 @@ export class Viewer {
       return; // Done.
     }
 
-    if (!this.altDown) {
-      // No Alt = disable all mouse-drag camera actions (wheel zoom still works).
+    if (this.unityAltOrbitEnabled) {
+      // Editor-friendly mapping: LMB orbit, MMB pan, RMB dolly (common in DCC tools and Unity Scene view style).
       this.controls.mouseButtons = {
-        LEFT: -1 as unknown as THREE.MOUSE, // Disable LMB.
-        MIDDLE: -1 as unknown as THREE.MOUSE, // Disable MMB.
-        RIGHT: -1 as unknown as THREE.MOUSE, // Disable RMB.
+        LEFT: THREE.MOUSE.ROTATE, // LMB orbit.
+        MIDDLE: THREE.MOUSE.PAN, // MMB pan.
+        RIGHT: THREE.MOUSE.DOLLY, // RMB dolly.
       };
       return; // Done.
     }
 
-    // Alt held = Unity-like mapping.
+    // OrbitControls default mapping: LMB orbit, MMB dolly, RMB pan.
     this.controls.mouseButtons = {
-      LEFT: THREE.MOUSE.ROTATE, // Alt+LMB orbit.
-      MIDDLE: THREE.MOUSE.PAN, // Alt+MMB pan.
-      RIGHT: THREE.MOUSE.DOLLY, // Alt+RMB dolly.
+      LEFT: THREE.MOUSE.ROTATE, // LMB orbit.
+      MIDDLE: THREE.MOUSE.DOLLY, // MMB dolly.
+      RIGHT: THREE.MOUSE.PAN, // RMB pan.
     };
   }
 

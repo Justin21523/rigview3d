@@ -62,6 +62,9 @@ export class Editor {
   private readonly selectionUpdatedListeners = new Set<SelectionUpdatedListener>(); // Subscribers for in-place selection updates.
   private readonly toolModeListeners = new Set<ToolModeChangeListener>(); // Subscribers for tool mode changes.
 
+  private readonly handleGlobalPointerEnd = () => this.onGlobalPointerEnd(); // Bound handler for pointerup/pointercancel recovery.
+  private readonly handleGlobalBlur = () => this.onGlobalBlur(); // Bound handler for blur recovery (prevents stuck camera locks).
+
   constructor(viewer: Viewer) {
     // Create an Editor bound to a Viewer instance.
     this.viewer = viewer; // Store viewer reference for later picking/highlight rendering.
@@ -122,6 +125,12 @@ export class Editor {
         redo: () => applyTransform(object, after), // Redo restores the end snapshot.
       });
     });
+
+    // Failsafe: if a pointer interaction ends outside the canvas (or gets cancelled),
+    // TransformControls can miss the "dragging end" signal and OrbitControls can stay disabled.
+    window.addEventListener("pointerup", this.handleGlobalPointerEnd, { passive: true }); // Recover on pointer release anywhere.
+    window.addEventListener("pointercancel", this.handleGlobalPointerEnd, { passive: true }); // Recover on pointer cancellation.
+    window.addEventListener("blur", this.handleGlobalBlur); // Recover when the tab loses focus mid-drag.
   }
 
   public setModelRoot(root: THREE.Object3D | null): void {
@@ -451,8 +460,12 @@ export class Editor {
     this.disposeHoverHelper(); // Remove and dispose hover helper resources.
   }
 
-  public pick(clientX: number, clientY: number): void {
-    // Raycast from a screen point (mouse coordinates) and select the first hit object.
+  public pick(
+    clientX: number, // Pointer X in client (viewport) coordinates.
+    clientY: number, // Pointer Y in client (viewport) coordinates.
+    options: { exact?: boolean } = {}, // Options to control what gets selected.
+  ): void {
+    // Raycast from a screen point (mouse coordinates) and select a hit object.
     if (!this.modelRoot) return; // Without a model root there is nothing to pick.
     if (this.isDraggingTransform) return; // Avoid changing selection while the gizmo is mid-drag.
 
@@ -473,7 +486,14 @@ export class Editor {
       return; // Done.
     }
 
-    this.select(hit.object); // Select the actual mesh/object that the ray hit.
+    if (options.exact) {
+      // Exact mode selects the specific mesh/object under the cursor.
+      this.select(hit.object); // Select the actual hit object.
+      return; // Done.
+    }
+
+    // Default mode selects the model root so transforms move the whole character/model (beginner-friendly).
+    this.select(this.modelRoot); // Select the model root for whole-model transforms.
   }
 
   public update(): void {
@@ -486,6 +506,9 @@ export class Editor {
     // Dispose editor-owned helpers (useful if the app ever unmounts).
     this.disposeSelectionHelper(); // Free outline helper GPU resources.
     this.disposeHoverHelper(); // Free hover helper GPU resources.
+    window.removeEventListener("pointerup", this.handleGlobalPointerEnd); // Remove global pointer recovery.
+    window.removeEventListener("pointercancel", this.handleGlobalPointerEnd); // Remove global pointer recovery.
+    window.removeEventListener("blur", this.handleGlobalBlur); // Remove global blur recovery.
     this.viewer.getScene().remove(this.transformControls); // Remove gizmo from the scene graph.
     this.transformControls.dispose(); // Remove event listeners and dispose gizmo geometry/materials.
     this.selection = null; // Clear selection reference.
@@ -497,6 +520,36 @@ export class Editor {
     this.selectionListeners.clear(); // Drop all subscriptions.
     this.selectionUpdatedListeners.clear(); // Drop subscriptions.
     this.toolModeListeners.clear(); // Drop subscriptions.
+  }
+
+  private onGlobalPointerEnd(): void {
+    // Recover from lost pointer up/cancel events that can leave TransformControls in a "dragging" state.
+    //
+    // We schedule a microtask so TransformControls' own handlers (on the canvas) can run first.
+    // If TransformControls updates `dragging` correctly, `isDraggingTransform` will already be false and we do nothing.
+    queueMicrotask(() => {
+      // Delay so our recovery doesn't interfere with normal TransformControls mouseUp history handling.
+      if (!this.isDraggingTransform) return; // If not dragging, no recovery is needed.
+      this.isDraggingTransform = false; // Clear our local dragging flag.
+      this.viewer.setOrbitEnabled(true); // Re-enable orbit camera so the viewport doesn't feel "dead".
+      this.gizmoObject = null; // Drop any in-progress snapshot state.
+      this.gizmoStart = null; // Drop any in-progress snapshot state.
+
+      // Reset TransformControls internal axis/highlight state by re-attaching if possible.
+      if (this.toolMode !== "select" && this.selection) {
+        // Re-attach to the current selection so the gizmo remains usable after recovery.
+        this.transformControls.detach(); // Clear internal state.
+        this.transformControls.attach(this.selection); // Restore attachment.
+      } else {
+        // If we're in Select mode or no selection, ensure the gizmo is detached and hidden.
+        this.transformControls.detach(); // Hide gizmo.
+      }
+    });
+  }
+
+  private onGlobalBlur(): void {
+    // Treat window blur as an "end of interaction" so camera controls can't get stuck.
+    this.onGlobalPointerEnd(); // Reuse the same recovery logic as pointerup/cancel.
   }
 
   private ensureSelectionHelper(target: THREE.Object3D): void {

@@ -23,12 +23,23 @@ export function initEditorUi(viewer: Viewer, editor: Editor): void {
   const canvas = document.getElementById("c") as HTMLCanvasElement | null; // Find the viewport canvas used for rendering.
   if (!canvas) throw new Error("Canvas element not found."); // Fail fast if markup is out of sync with code.
 
-  canvas.addEventListener("pointerdown", () => {
+  let pointerDownX = 0; // Track pointer-down X for click-vs-drag detection.
+  let pointerDownY = 0; // Track pointer-down Y for click-vs-drag detection.
+  let pointerDownButton = -1; // Track which button started the interaction.
+  let pointerMoved = false; // True once movement exceeds the click tolerance.
+  const clickTolerancePx = 6; // Pixel tolerance used to treat a press as a "click" (prevents selection while orbiting).
+
+  canvas.addEventListener("pointerdown", (e) => {
     // Clicking the viewport should "take focus" (Unity-like) so keyboard shortcuts work immediately.
     //
     // In browsers, clicking a non-focusable element does not blur inputs, so the active text field can keep
     // consuming shortcuts (our shortcut handler ignores keys while typing).
     canvas.focus(); // Focus the canvas so `keydown` targets are no longer text inputs.
+
+    pointerDownX = e.clientX; // Record initial pointer X.
+    pointerDownY = e.clientY; // Record initial pointer Y.
+    pointerDownButton = e.button; // Record which mouse button was pressed.
+    pointerMoved = false; // Reset moved flag for this interaction.
   });
 
   const searchInput = mustGetEl("hierarchy-search") as HTMLInputElement; // Search box for filtering the hierarchy list.
@@ -41,10 +52,9 @@ export function initEditorUi(viewer: Viewer, editor: Editor): void {
   const uuidToObject = new Map<string, THREE.Object3D>(); // Map rendered DOM rows back to real Object3D instances.
   const contextMenu = createContextMenu(); // Singleton context menu instance for hierarchy rows.
 
-  const expandAll = (root: THREE.Object3D) => {
-    // Expand the entire tree by default so the hierarchy starts fully visible (Unity-like).
-    expanded.clear(); // Clear any previous expand state.
-    root.traverse((obj) => expanded.add(obj.uuid)); // Mark every node as expanded.
+  const resetExpandState = () => {
+    // Start collapsed so large rigs don't explode into thousands of rows by default (beginner-friendly).
+    expanded.clear(); // Keep empty = everything collapsed until the user expands nodes.
   };
 
   const render = () => {
@@ -181,9 +191,18 @@ export function initEditorUi(viewer: Viewer, editor: Editor): void {
 
   canvas.addEventListener("pointermove", (e) => {
     // Moving the pointer in the viewport updates hover feedback (outline + cursor).
-    const isFlyLooking = viewer.isFlyEnabled() && (e.buttons & 2) !== 0; // In fly mode, RMB look is active while RMB is held.
-    if (e.altKey || isFlyLooking) {
-      // Unity-like camera navigation uses Alt and/or fly RMB look; suppress hover feedback while navigating.
+    if (pointerDownButton === 0 && (e.buttons & 1) !== 0) {
+      // While LMB is held, treat movement as potential camera orbit; suppress hover and track drag distance.
+      const dx = e.clientX - pointerDownX; // Horizontal delta from pointerdown.
+      const dy = e.clientY - pointerDownY; // Vertical delta from pointerdown.
+      if (Math.hypot(dx, dy) > clickTolerancePx) pointerMoved = true; // Mark as drag once we exceed the tolerance.
+      editor.clearHover(); // Hide hover outline during drags (less flicker).
+      canvas.style.cursor = ""; // Restore default cursor.
+      return; // Done.
+    }
+
+    if (e.buttons !== 0) {
+      // Any drag (MMB/RMB) is typically camera navigation; suppress hover for stability.
       editor.clearHover(); // Hide hover outline while orbiting/panning/dollying.
       canvas.style.cursor = ""; // Restore default cursor.
       return; // Done.
@@ -199,12 +218,22 @@ export function initEditorUi(viewer: Viewer, editor: Editor): void {
     canvas.style.cursor = ""; // Restore default cursor.
   });
 
-  canvas.addEventListener("click", (e) => {
-    // Clicking in the viewport performs raycast picking to select objects.
-    if (e.button !== 0) return; // Only respond to left-click selection.
-    if (e.altKey) return; // Alt+click is reserved for Unity-like camera navigation, not selection.
-    if (editor.isTransformDragging()) return; // Ignore clicks while the gizmo is mid-drag (prevents accidental selection clears).
-    editor.pick(e.clientX, e.clientY); // Convert the click position into a raycast and update selection.
+  canvas.addEventListener("pointerup", (e) => {
+    // On pointer up, treat a short press as a selection click (but ignore drags used for camera navigation).
+    if (e.button !== 0) return; // Only respond to left button selection.
+    if (editor.isTransformDragging()) return; // Ignore while gizmo is mid-drag.
+    if (pointerMoved) return; // Ignore if the pointer moved (likely camera orbit).
+
+    editor.pick(e.clientX, e.clientY, {
+      // Default to "whole model" selection; hold Shift/Ctrl/Cmd for exact object selection.
+      exact: e.shiftKey || e.ctrlKey || e.metaKey,
+    });
+  });
+
+  canvas.addEventListener("pointercancel", () => {
+    // Reset click tracking if the pointer interaction is cancelled.
+    pointerDownButton = -1; // Clear stored button.
+    pointerMoved = false; // Reset moved state.
   });
 
   tree.addEventListener("click", (e) => {
@@ -226,7 +255,7 @@ export function initEditorUi(viewer: Viewer, editor: Editor): void {
   editor.onRootChange((root) => {
     // Re-render the hierarchy list when a new model is loaded.
     currentRoot = root; // Store root reference (null clears the hierarchy).
-    if (currentRoot) expandAll(currentRoot); // Start expanded so hierarchy is immediately usable.
+    resetExpandState(); // Collapse by default for large rigs.
     render(); // Refresh UI immediately.
   });
 
@@ -241,7 +270,7 @@ export function initEditorUi(viewer: Viewer, editor: Editor): void {
   });
 
   currentRoot = editor.getModelRoot(); // Initialize from current editor state (important if init order changes).
-  if (currentRoot) expandAll(currentRoot); // Ensure initial root is expanded on first render.
+  resetExpandState(); // Keep collapsed by default.
   render(); // Initial render so the panel is not empty on first paint.
 }
 

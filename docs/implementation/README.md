@@ -29,7 +29,8 @@
 21. `19-delete-and-safety.md`：Delete 的取捨與資源管理注意事項
 22. `20-editor-polish.md`：Editor phase-5（duplicate / gizmo size / keyboard transforms）
 23. `21-editor-unity-camera-hierarchy-settings.md`：Editor phase-6（Alt 相機 / Fly / Hierarchy 右鍵 / Settings）
-24. `23-editor-focus-and-camera-toggle.md`：Editor phase-8（Viewport focus 修復 / Alt orbit 開關）
+24. `23-editor-focus-and-camera-toggle.md`：Editor phase-8（Viewport focus 修復 / 相機滑鼠 mapping 開關 / 點選保護）
+25. `24-editor-interaction-recovery.md`：Editor phase-9（gizmo 拖曳後相機不再卡死）
 
 ## 如何對照程式碼
 建議你開兩個視窗：

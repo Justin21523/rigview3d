@@ -22,7 +22,7 @@ export function initToolUi(viewer: Viewer, editor: Editor): void {
   const gizmoSize = mustGetEl("tool-gizmo-size") as HTMLInputElement; // Range input for TransformControls size scaling.
   const gizmoSizeValue = mustGetEl("tool-gizmo-size-value"); // Text label that shows gizmo size numeric value.
   const localSpace = mustGetEl("tool-space-local") as HTMLInputElement; // Checkbox for local/world space toggle.
-  const altOrbit = mustGetEl("tool-alt-orbit") as HTMLInputElement; // Checkbox for Unity-like Alt camera navigation.
+  const altOrbit = mustGetEl("tool-alt-orbit") as HTMLInputElement; // Checkbox for editor-friendly orbit mouse mapping.
   const flyEnabled = mustGetEl("tool-fly-enabled") as HTMLInputElement; // Checkbox for Fly/WASD camera mode.
   const flySpeed = mustGetEl("tool-fly-speed") as HTMLInputElement; // Range input for fly speed.
   const flySpeedValue = mustGetEl("tool-fly-speed-value"); // Text label for fly speed.
@@ -94,7 +94,7 @@ export function initToolUi(viewer: Viewer, editor: Editor): void {
   });
 
   altOrbit.addEventListener("change", () => {
-    // Enable/disable Unity-like "Alt + mouse" orbit navigation.
+    // Toggle orbit mouse mapping (editor-friendly vs OrbitControls default).
     viewer.setUnityAltOrbitEnabled(altOrbit.checked); // Apply to Viewer immediately (changes OrbitControls mouse mapping).
     updateToolsSettings({ unityAltOrbit: altOrbit.checked }); // Persist preference.
   });

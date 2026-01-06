@@ -1,4 +1,4 @@
-# 23 — 互動失效問題：Viewport Focus + Alt Orbit 開關
+# 23 — 互動失效問題：Viewport Focus + Camera Mapping + 點選保護
 
 這一章解釋你遇到的「按鍵都失效 / 物件無法用快捷鍵切 Move/Rotate/Scale」這種常見 Web 編輯器問題，並說明我們怎麼修。
 
@@ -40,17 +40,35 @@
 
 ---
 
-## 3) 相機也「像壞掉」的原因：Alt Orbit 被啟用但你不一定有按 Alt
+## 3) 相機也「像壞掉」的原因：你可能只是用到不同的滑鼠按鍵 mapping
 
-在 `editor-phase-6` 我們做了 Unity-like camera 操作：
-- Alt+LMB orbit / Alt+MMB pan / Alt+RMB dolly
+OrbitControls 有多種常見的「滑鼠操作習慣」：
+- 有些工具用 RMB pan
+- 有些工具用 MMB pan
+- 有些工具用 RMB dolly（或用 wheel dolly）
 
-如果你沒有按 Alt，OrbitControls 的滑鼠拖曳會被關掉，所以你會覺得「相機不能動」。
+為了讓操作更符合 3D 編輯器習慣，我們在 Tools → Camera 做了一個 mapping 開關：
+- `Editor mouse mapping (MMB pan / RMB dolly)`
 
-為了讓行為更明確，我們新增一個 Tools → Camera 的 checkbox：
-- `Alt + mouse to orbit/pan/dolly (Unity)`
+你可以把它想成：
+- **開啟**：LMB orbit / MMB pan / RMB dolly（比較像常見 DCC/編輯器）
+- **關閉**：回到 OrbitControls 預設（LMB orbit / MMB dolly / RMB pan）
 
-你可以關掉它，恢復「不用按 Alt 也能拖曳 orbit」的傳統 OrbitControls 行為。
+這個設定會被存進 localStorage（`src/core/settings.ts`），重開不會跑掉。
 
-而且這個設定會被存進 localStorage（`src/core/settings.ts`），重開不會跑掉。
+---
 
+## 4) 為什麼「點選選取」會看起來怪？（以及我們怎麼避免）
+
+當你用滑鼠左鍵拖曳相機 orbit 時，瀏覽器有時仍會觸發 click，導致：
+- 你只是想轉相機
+- 但放開滑鼠時卻「順便選到物件」或「清掉選取」
+
+所以我們改成更像編輯器的做法：
+- 用 `pointerdown` 記住起點
+- 用 `pointermove` 量測移動距離
+- 超過一個容忍值（例如 6px）就當作「拖曳」→ 不做選取
+
+此外，為了讓新手更容易「整隻角色一起移動」：
+- Viewport 預設點到模型會選 **model root**
+- 你要選單一 mesh/子物件時，按住 `Shift` 或 `Ctrl/Cmd` 再點（exact selection）
