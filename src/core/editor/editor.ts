@@ -9,6 +9,7 @@
 
 import * as THREE from "three"; // Import Three.js types + utilities (Raycaster, Vector2, BoxHelper, math helpers).
 import { TransformControls } from "three/examples/jsm/controls/TransformControls.js"; // Import Unity-like transform gizmos (move/rotate/scale).
+import { clone as cloneSkeleton } from "three/examples/jsm/utils/SkeletonUtils.js"; // Import a clone helper that preserves SkinnedMesh skeleton bindings.
 import type { Viewer } from "../viewer"; // Import Viewer type so Editor can access camera/scene/domElement.
 import { HistoryStack, type EditorCommand } from "./history"; // Import a small undo/redo stack for editor commands.
 import {
@@ -52,6 +53,7 @@ export class Editor {
   private scaleSnap = 0.1; // Scale units per snap step for scaling.
   private space: "local" | "world" = "local"; // Local/world transform space for the gizmo.
   private nudgeStep = 0.05; // World units per arrow-key nudge (wired in shortcuts later).
+  private gizmoSize = 1; // Visual size multiplier for TransformControls (does not affect actual transforms).
 
   private readonly rootListeners = new Set<RootChangeListener>(); // Subscribers for root changes.
   private readonly selectionListeners = new Set<SelectionChangeListener>(); // Subscribers for selection changes.
@@ -68,6 +70,7 @@ export class Editor {
     ); // End TransformControls constructor call.
     this.transformControls.visible = false; // Hide the gizmo until we have a selection + an active transform tool.
     this.transformControls.enabled = false; // Disable pointer handling until the user switches away from Select mode.
+    this.transformControls.setSize(this.gizmoSize); // Apply default gizmo size immediately so UI slider matches behavior.
     this.viewer.getScene().add(this.transformControls); // Add gizmo to the scene so it renders in the viewport.
 
     this.transformControls.addEventListener("dragging-changed", (e) => {
@@ -254,6 +257,47 @@ export class Editor {
     });
   }
 
+  public duplicateSelection(): void {
+    // Duplicate the selected object as a sibling under the same parent (undoable).
+    const selection = this.selection; // Snapshot selection (we want a stable reference for history closures).
+    if (!selection) return; // Guard: nothing selected means nothing to duplicate.
+    if (this.modelRoot && selection === this.modelRoot) return; // Avoid duplicating the model root (too large / confusing).
+
+    const parent = selection.parent; // Read current parent so we can insert the duplicate as a sibling.
+    if (!parent) return; // Guard: cannot duplicate objects that are not attached to a parent.
+
+    const index = parent.children.indexOf(selection); // Record original index so we can insert the duplicate next to the source.
+    if (index === -1) return; // Guard: should not happen, but avoids out-of-bounds behavior.
+
+    const duplicate = cloneSkeleton(selection); // Clone the subtree (handles SkinnedMesh skeleton rebinding correctly).
+    duplicate.name = makeUniqueDuplicateName(selection, parent); // Give the duplicate a readable, unique name.
+    duplicate.updateMatrixWorld(true); // Ensure matrices are computed so helpers/gizmos behave correctly immediately.
+
+    const addDuplicate = () => {
+      // Add the duplicate back under the same parent in a stable sibling order.
+      parent.add(duplicate); // Attach duplicate to the parent (appends at end by default).
+      moveChildToIndex(parent, duplicate, index + 1); // Reorder children so the duplicate sits next to the source.
+    };
+
+    addDuplicate(); // Perform the duplication action immediately (history assumes effects are already applied).
+    this.select(duplicate); // Unity-like behavior: select the newly duplicated object.
+
+    this.history.push({
+      // Push an undoable duplicate command.
+      label: "Duplicate", // Label for history UI.
+      undo: () => {
+        // Undo removes the duplicate and re-selects the original.
+        parent.remove(duplicate); // Detach the duplicate from the scene graph.
+        this.select(selection); // Restore selection to the original object.
+      },
+      redo: () => {
+        // Redo re-adds the duplicate and selects it again.
+        addDuplicate(); // Re-attach at the original position.
+        this.select(duplicate); // Select the duplicate.
+      },
+    });
+  }
+
   public setSnapEnabled(enabled: boolean): void {
     // Enable/disable snapping for gizmo operations.
     this.snapEnabled = enabled; // Store toggle state.
@@ -301,6 +345,18 @@ export class Editor {
   public getNudgeStep(): number {
     // Expose the configured nudge step for keyboard shortcuts.
     return this.nudgeStep; // Return stored nudge amount.
+  }
+
+  public setGizmoSize(size: number): void {
+    // Set the visual size of TransformControls.
+    if (!Number.isFinite(size)) return; // Ignore invalid values.
+    this.gizmoSize = Math.max(0.01, size); // Clamp to a small positive number to avoid disappearing gizmos.
+    this.transformControls.setSize(this.gizmoSize); // Apply to TransformControls so the viewport reflects the new size.
+  }
+
+  public getGizmoSize(): number {
+    // Read the current gizmo size multiplier (useful for initializing UI).
+    return this.gizmoSize; // Return current size.
   }
 
   public select(object: THREE.Object3D | null): void {
@@ -456,4 +512,21 @@ function moveChildToIndex(parent: THREE.Object3D, child: THREE.Object3D, targetI
   parent.children.splice(currentIndex, 1); // Remove child from its current position.
   const clamped = Math.max(0, Math.min(targetIndex, parent.children.length)); // Clamp target index to valid bounds.
   parent.children.splice(clamped, 0, child); // Insert child back at the desired index.
+}
+
+function makeUniqueDuplicateName(source: THREE.Object3D, parent: THREE.Object3D): string {
+  // Create a Unity-like duplicate name that is unique among the parent's current children.
+  const base = source.name && source.name.trim() ? source.name.trim() : source.type; // Prefer the existing name; fall back to type.
+  const existing = new Set(parent.children.map((c) => c.name)); // Collect sibling names to avoid collisions.
+
+  const candidateBase = `${base} Copy`; // Use a readable "Copy" suffix (Unity-like).
+  if (!existing.has(candidateBase)) return candidateBase; // If unused, return it immediately.
+
+  for (let i = 1; i < 10_000; i++) {
+    // Keep incrementing until we find a name that isn't used by a sibling.
+    const candidate = `${candidateBase} (${i})`; // Add a numeric suffix like "Copy (1)".
+    if (!existing.has(candidate)) return candidate; // Return the first unused candidate.
+  }
+
+  return `${candidateBase} (${Date.now()})`; // Fallback: use a timestamp if we somehow hit an extreme collision case.
 }

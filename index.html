@@ -129,16 +129,22 @@
               <input id="tool-snap-scale" class="number-input" type="number" min="0" step="0.01" value="0.1" /> <!-- Scale snap size. -->
             </label> <!-- End scale step field. -->
 
-            <label class="field"> <!-- Field: nudge step for keyboard arrow moves. -->
-              <span class="field-label">Nudge step</span> <!-- Label for nudge step. -->
-              <input id="tool-nudge" class="number-input" type="number" min="0" step="0.01" value="0.05" /> <!-- Translation amount per arrow key press. -->
-            </label> <!-- End nudge step field. -->
+	            <label class="field"> <!-- Field: nudge step for keyboard arrow moves. -->
+	              <span class="field-label">Nudge step</span> <!-- Label for nudge step. -->
+	              <input id="tool-nudge" class="number-input" type="number" min="0" step="0.01" value="0.05" /> <!-- Translation amount per arrow key press. -->
+	            </label> <!-- End nudge step field. -->
 
-            <label class="checkbox"> <!-- Checkbox row: local/world toggle. -->
-              <input id="tool-space-local" type="checkbox" checked /> <!-- Checked = local space, unchecked = world space. -->
-              <span>Local space</span> <!-- Local space label. -->
-            </label> <!-- End local/world row. -->
-          </section> <!-- End Tools panel. -->
+	            <label class="field"> <!-- Field: gizmo size scaling (visual only). -->
+	              <span class="field-label">Gizmo size</span> <!-- Label for gizmo size slider. -->
+	              <input id="tool-gizmo-size" class="range" type="range" min="0.5" max="2.5" step="0.05" value="1" /> <!-- Scale factor for TransformControls size. -->
+	              <span id="tool-gizmo-size-value" class="field-value">1.00</span> <!-- Value label for current gizmo size. -->
+	            </label> <!-- End gizmo size field. -->
+
+	            <label class="checkbox"> <!-- Checkbox row: local/world toggle. -->
+	              <input id="tool-space-local" type="checkbox" checked /> <!-- Checked = local space, unchecked = world space. -->
+	              <span>Local space</span> <!-- Local space label. -->
+	            </label> <!-- End local/world row. -->
+	          </section> <!-- End Tools panel. -->
 
           <section class="panel"> <!-- Panel: inspector like Unity Inspector. -->
             <h2 class="panel-title">Inspector</h2> <!-- Panel heading. -->
@@ -243,18 +249,24 @@
 
           <section class="panel"> <!-- Panel: keyboard shortcuts help (read-only). -->
             <h2 class="panel-title">Shortcuts</h2> <!-- Panel heading. -->
-            <div class="shortcut-list"> <!-- Container for shortcut lines. -->
-              <div><span class="kbd">Q</span> Select</div> <!-- Select tool. -->
-              <div><span class="kbd">W</span> Move</div> <!-- Move tool. -->
-              <div><span class="kbd">E</span> Rotate</div> <!-- Rotate tool. -->
-              <div><span class="kbd">R</span> Scale</div> <!-- Scale tool. -->
-              <div><span class="kbd">F</span> Frame selection</div> <!-- Frame selected object. -->
-              <div><span class="kbd">Esc</span> Clear selection</div> <!-- Clear selection. -->
-              <div><span class="kbd">Del</span> Delete selection</div> <!-- Delete selected node. -->
-              <div><span class="kbd">Ctrl</span>+<span class="kbd">Z</span> Undo</div> <!-- Undo. -->
-              <div><span class="kbd">Ctrl</span>+<span class="kbd">Y</span> Redo</div> <!-- Redo. -->
-            </div> <!-- End shortcut list. -->
-          </section> <!-- End Shortcuts panel. -->
+	            <div class="shortcut-list"> <!-- Container for shortcut lines. -->
+	              <div><span class="kbd">Q</span> Select</div> <!-- Select tool. -->
+	              <div><span class="kbd">W</span> Move</div> <!-- Move tool. -->
+	              <div><span class="kbd">E</span> Rotate</div> <!-- Rotate tool. -->
+	              <div><span class="kbd">R</span> Scale</div> <!-- Scale tool. -->
+	              <div><span class="kbd">G</span> Toggle snap</div> <!-- Snap toggle. -->
+	              <div><span class="kbd">X</span> Toggle local/world</div> <!-- Local/world toggle. -->
+	              <div><span class="kbd">F</span> Frame selection</div> <!-- Frame selected object. -->
+	              <div><span class="kbd">Esc</span> Clear selection</div> <!-- Clear selection. -->
+	              <div><span class="kbd">Del</span> Delete selection</div> <!-- Delete selected node. -->
+	              <div><span class="kbd">Ctrl</span>+<span class="kbd">D</span> Duplicate</div> <!-- Duplicate selected node. -->
+	              <div><span class="kbd">Ctrl</span>+<span class="kbd">Z</span> Undo</div> <!-- Undo. -->
+	              <div><span class="kbd">Ctrl</span>+<span class="kbd">Y</span> Redo</div> <!-- Redo. -->
+	              <div><span class="kbd">Arrows</span> Nudge</div> <!-- Translate selection in world X/Z. -->
+	              <div><span class="kbd">[</span>/<span class="kbd">]</span> Rotate</div> <!-- Rotate selection around Y axis. -->
+	              <div><span class="kbd">-</span>/<span class="kbd">=</span> Scale</div> <!-- Uniform scale. -->
+	            </div> <!-- End shortcut list. -->
+	          </section> <!-- End Shortcuts panel. -->
         </aside> <!-- End right sidebar. -->
       </div> <!-- End main layout. -->
     </div> <!-- End #app wrapper. -->

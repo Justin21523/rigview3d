@@ -17,6 +17,8 @@ export function initToolUi(editor: Editor): void {
   const snapRotate = mustGetEl("tool-snap-rotate") as HTMLInputElement; // Number input for rotation snap step in degrees.
   const snapScale = mustGetEl("tool-snap-scale") as HTMLInputElement; // Number input for scale snap step.
   const nudgeStep = mustGetEl("tool-nudge") as HTMLInputElement; // Number input for keyboard nudge step (used in shortcuts later).
+  const gizmoSize = mustGetEl("tool-gizmo-size") as HTMLInputElement; // Range input for TransformControls size scaling.
+  const gizmoSizeValue = mustGetEl("tool-gizmo-size-value"); // Text label that shows gizmo size numeric value.
   const localSpace = mustGetEl("tool-space-local") as HTMLInputElement; // Checkbox for local/world space toggle.
 
   const setActive = (mode: ToolMode) => {
@@ -65,6 +67,14 @@ export function initToolUi(editor: Editor): void {
     editor.setNudgeStep(value); // Store in Editor (used later by arrow-key shortcuts).
   });
 
+  gizmoSize.addEventListener("input", () => {
+    // Update gizmo visual size continuously while dragging the slider.
+    const value = Number(gizmoSize.value); // Parse slider value.
+    if (!Number.isFinite(value)) return; // Ignore invalid numbers.
+    editor.setGizmoSize(value); // Apply size to TransformControls.
+    gizmoSizeValue.textContent = value.toFixed(2); // Update label so user sees the exact value.
+  });
+
   localSpace.addEventListener("change", () => {
     // Toggle between local and world gizmo orientation.
     editor.setSpace(localSpace.checked ? "local" : "world"); // Map checkbox to TransformControls space strings.
@@ -78,8 +88,10 @@ export function initToolUi(editor: Editor): void {
   editor.setRotationSnapDegrees(Number(snapRotate.value)); // Apply initial rotate snap step.
   editor.setScaleSnap(Number(snapScale.value)); // Apply initial scale snap step.
   editor.setNudgeStep(Number(nudgeStep.value)); // Apply initial nudge step.
+  editor.setGizmoSize(Number(gizmoSize.value)); // Apply initial gizmo size value.
   editor.setSpace(localSpace.checked ? "local" : "world"); // Apply initial local/world setting.
 
+  gizmoSizeValue.textContent = Number(gizmoSize.value).toFixed(2); // Initialize gizmo size label from the input default.
   setActive(editor.getToolMode()); // Sync button highlight for the initial tool mode.
 }
 
@@ -89,4 +101,3 @@ function mustGetEl(id: string): HTMLElement {
   if (!el) throw new Error(`Missing element: #${id}`); // Throw if markup is out of sync.
   return el; // Return the element as non-null.
 }
-
