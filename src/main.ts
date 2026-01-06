@@ -74,6 +74,10 @@ function applyInitialSettingsToDom(settings: ReturnType<typeof getSettings>): vo
   const nudge = document.getElementById("tool-nudge") as HTMLInputElement | null; // Tools: keyboard nudge step.
   const gizmoSize = document.getElementById("tool-gizmo-size") as HTMLInputElement | null; // Tools: gizmo size slider.
   const localSpace = document.getElementById("tool-space-local") as HTMLInputElement | null; // Tools: local/world checkbox.
+  const pivotMode = document.getElementById("tool-pivot-mode") as HTMLSelectElement | null; // Tools: pivot/center mode select.
+  const axisX = document.getElementById("tool-axis-x") as HTMLInputElement | null; // Tools: X axis toggle.
+  const axisY = document.getElementById("tool-axis-y") as HTMLInputElement | null; // Tools: Y axis toggle.
+  const axisZ = document.getElementById("tool-axis-z") as HTMLInputElement | null; // Tools: Z axis toggle.
   const altOrbit = document.getElementById("tool-alt-orbit") as HTMLInputElement | null; // Tools: Unity-like Alt navigation toggle.
   const flyEnabled = document.getElementById("tool-fly-enabled") as HTMLInputElement | null; // Tools: fly toggle.
   const flySpeed = document.getElementById("tool-fly-speed") as HTMLInputElement | null; // Tools: fly speed slider.
@@ -85,6 +89,10 @@ function applyInitialSettingsToDom(settings: ReturnType<typeof getSettings>): vo
   if (nudge) nudge.value = String(settings.tools.nudgeStep); // Restore nudge step.
   if (gizmoSize) gizmoSize.value = String(settings.tools.gizmoSize); // Restore gizmo size.
   if (localSpace) localSpace.checked = settings.tools.localSpace; // Restore local/world.
+  if (pivotMode) pivotMode.value = settings.tools.pivotMode; // Restore pivot/center mode.
+  if (axisX) axisX.checked = settings.tools.axisX; // Restore X axis.
+  if (axisY) axisY.checked = settings.tools.axisY; // Restore Y axis.
+  if (axisZ) axisZ.checked = settings.tools.axisZ; // Restore Z axis.
   if (altOrbit) altOrbit.checked = settings.tools.unityAltOrbit; // Restore Alt navigation preference.
   if (flyEnabled) flyEnabled.checked = settings.tools.flyEnabled; // Restore fly mode.
   if (flySpeed) flySpeed.value = String(settings.tools.flySpeed); // Restore fly speed.

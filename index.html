@@ -145,6 +145,32 @@
 	              <span>Local space</span> <!-- Local space label. -->
 	            </label> <!-- End local/world row. -->
 
+            <label class="field"> <!-- Field: pivot/center toggle for gizmo placement. -->
+              <span class="field-label">Pivot</span> <!-- Label for pivot mode. -->
+              <select id="tool-pivot-mode" class="select"> <!-- Select between object pivot and bounds center. -->
+                <option value="pivot">Pivot</option> <!-- Gizmo uses the active object's pivot. -->
+                <option value="center">Center</option> <!-- Gizmo uses the selection bounds center. -->
+              </select> <!-- End pivot mode select. -->
+            </label> <!-- End pivot mode field. -->
+
+            <div class="field"> <!-- Field: axis locks for TransformControls. -->
+              <span class="field-label">Axes</span> <!-- Label for axes group. -->
+              <div class="axis-toggles" role="group" aria-label="Axis locks"> <!-- Group three axis toggles. -->
+                <label class="axis-chip"> <!-- X axis toggle. -->
+                  <input id="tool-axis-x" type="checkbox" checked /> <!-- Checked means X axis is enabled. -->
+                  <span>X</span> <!-- X label. -->
+                </label> <!-- End X toggle. -->
+                <label class="axis-chip"> <!-- Y axis toggle. -->
+                  <input id="tool-axis-y" type="checkbox" checked /> <!-- Checked means Y axis is enabled. -->
+                  <span>Y</span> <!-- Y label. -->
+                </label> <!-- End Y toggle. -->
+                <label class="axis-chip"> <!-- Z axis toggle. -->
+                  <input id="tool-axis-z" type="checkbox" checked /> <!-- Checked means Z axis is enabled. -->
+                  <span>Z</span> <!-- Z label. -->
+                </label> <!-- End Z toggle. -->
+              </div> <!-- End axis toggles group. -->
+            </div> <!-- End axes field. -->
+
               <h3 class="subhead">Camera</h3> <!-- Subheading for camera navigation settings. -->
 
               <label class="checkbox"> <!-- Checkbox row: Unity-like Alt navigation toggle. -->
@@ -168,6 +194,13 @@
             <h2 class="panel-title">Inspector</h2> <!-- Panel heading. -->
             <div id="inspector-empty" class="muted">Select an object to edit its properties.</div> <!-- Empty state when nothing is selected. -->
             <div id="inspector-content" hidden> <!-- Inspector content shown when selection exists. -->
+              <div class="inspector-meta"> <!-- Small meta header row for selection state and quick actions. -->
+                <div id="inspector-selection-summary" class="muted">—</div> <!-- Selection summary (single vs multi). -->
+                <button id="inspector-select-root" class="btn btn-small" type="button">Select Root</button> <!-- Convenience: select model root. -->
+              </div> <!-- End inspector meta row. -->
+
+              <div id="inspector-multi-hint" class="muted" hidden>Multiple objects selected. Use the gizmo to transform the group.</div> <!-- Hint shown for multi-selection. -->
+
               <label class="field"> <!-- Field: object name. -->
                 <span class="field-label">Name</span> <!-- Label for name input. -->
                 <input id="inspector-name" class="text-input" type="text" /> <!-- Editable object name. -->

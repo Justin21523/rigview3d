@@ -19,6 +19,7 @@
 - `editor-phase-7`：新增 FBX 載入支援（含貼圖路徑與常見貼圖格式）
 - `editor-phase-8`：修復互動體驗（Viewport focus 讓快捷鍵可用 + 相機滑鼠 mapping 開關）
 - `editor-phase-9`：互動穩定性提升（選取/相機不互相打架 + gizmo 拖曳後不再卡死）
+- `editor-phase-10`：Transform 工作流補強（Shift 多選 + 群組 gizmo + Pivot/Center + X/Y/Z 軸鎖 + Inspector 多選狀態）
 
 ## 查詢 tags
 

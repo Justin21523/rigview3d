@@ -22,6 +22,10 @@ export function initToolUi(viewer: Viewer, editor: Editor): void {
   const gizmoSize = mustGetEl("tool-gizmo-size") as HTMLInputElement; // Range input for TransformControls size scaling.
   const gizmoSizeValue = mustGetEl("tool-gizmo-size-value"); // Text label that shows gizmo size numeric value.
   const localSpace = mustGetEl("tool-space-local") as HTMLInputElement; // Checkbox for local/world space toggle.
+  const pivotMode = mustGetEl("tool-pivot-mode") as HTMLSelectElement; // Select for pivot/center gizmo placement.
+  const axisX = mustGetEl("tool-axis-x") as HTMLInputElement; // Checkbox for enabling the X axis on TransformControls.
+  const axisY = mustGetEl("tool-axis-y") as HTMLInputElement; // Checkbox for enabling the Y axis on TransformControls.
+  const axisZ = mustGetEl("tool-axis-z") as HTMLInputElement; // Checkbox for enabling the Z axis on TransformControls.
   const altOrbit = mustGetEl("tool-alt-orbit") as HTMLInputElement; // Checkbox for editor-friendly orbit mouse mapping.
   const flyEnabled = mustGetEl("tool-fly-enabled") as HTMLInputElement; // Checkbox for Fly/WASD camera mode.
   const flySpeed = mustGetEl("tool-fly-speed") as HTMLInputElement; // Range input for fly speed.
@@ -93,6 +97,31 @@ export function initToolUi(viewer: Viewer, editor: Editor): void {
     updateToolsSettings({ localSpace: localSpace.checked }); // Persist local/world toggle.
   });
 
+  pivotMode.addEventListener("change", () => {
+    // Toggle pivot placement between object pivot and bounds center.
+    const value = pivotMode.value === "center" ? "center" : "pivot"; // Coerce to known values.
+    editor.setPivotMode(value); // Apply to Editor so the gizmo re-anchors immediately.
+    updateToolsSettings({ pivotMode: value }); // Persist pivot mode.
+  });
+
+  const syncAxes = () => {
+    // Apply axis visibility to Editor and persist it (single helper reduces duplicated code).
+    editor.setAxisVisibility({
+      x: axisX.checked,
+      y: axisY.checked,
+      z: axisZ.checked,
+    }); // Apply to TransformControls showX/showY/showZ.
+    updateToolsSettings({
+      axisX: axisX.checked,
+      axisY: axisY.checked,
+      axisZ: axisZ.checked,
+    }); // Persist axis toggles.
+  };
+
+  axisX.addEventListener("change", syncAxes); // Re-apply when X axis toggle changes.
+  axisY.addEventListener("change", syncAxes); // Re-apply when Y axis toggle changes.
+  axisZ.addEventListener("change", syncAxes); // Re-apply when Z axis toggle changes.
+
   altOrbit.addEventListener("change", () => {
     // Toggle orbit mouse mapping (editor-friendly vs OrbitControls default).
     viewer.setUnityAltOrbitEnabled(altOrbit.checked); // Apply to Viewer immediately (changes OrbitControls mouse mapping).
@@ -128,6 +157,8 @@ export function initToolUi(viewer: Viewer, editor: Editor): void {
   editor.setNudgeStep(Number(nudgeStep.value)); // Apply initial nudge step.
   editor.setGizmoSize(Number(gizmoSize.value)); // Apply initial gizmo size value.
   editor.setSpace(localSpace.checked ? "local" : "world"); // Apply initial local/world setting.
+  editor.setPivotMode(pivotMode.value === "center" ? "center" : "pivot"); // Apply initial pivot mode.
+  editor.setAxisVisibility({ x: axisX.checked, y: axisY.checked, z: axisZ.checked }); // Apply initial axis toggles.
 
   viewer.setUnityAltOrbitEnabled(altOrbit.checked); // Apply initial Alt navigation preference.
   viewer.setFlyEnabled(flyEnabled.checked); // Apply initial fly mode toggle state.

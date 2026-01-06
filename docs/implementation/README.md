@@ -31,6 +31,7 @@
 23. `21-editor-unity-camera-hierarchy-settings.md`：Editor phase-6（Alt 相機 / Fly / Hierarchy 右鍵 / Settings）
 24. `23-editor-focus-and-camera-toggle.md`：Editor phase-8（Viewport focus 修復 / 相機滑鼠 mapping 開關 / 點選保護）
 25. `24-editor-interaction-recovery.md`：Editor phase-9（gizmo 拖曳後相機不再卡死）
+26. `25-editor-multi-selection-pivot-axis.md`：Editor phase-10（多選 / 群組 gizmo / Pivot-Center / X-Y-Z 軸鎖）
 
 ## 如何對照程式碼
 建議你開兩個視窗：

@@ -23,6 +23,10 @@ export function initInspectorUi(editor: Editor): void {
   const empty = mustGetEl("inspector-empty"); // Empty-state element displayed when nothing is selected.
   const content = mustGetEl("inspector-content"); // Container with actual inspector controls (hidden when no selection).
 
+  const selectionSummary = mustGetEl("inspector-selection-summary"); // Small summary line for single vs multi-selection.
+  const selectRootBtn = mustGetEl("inspector-select-root") as HTMLButtonElement; // Button that selects the model root.
+  const multiHint = mustGetEl("inspector-multi-hint"); // Hint shown when multiple objects are selected.
+
   const nameInput = mustGetEl("inspector-name") as HTMLInputElement; // Input for editing Object3D.name.
   const typeValue = mustGetEl("inspector-type"); // Read-only label showing Object3D.type.
   const visibleInput = mustGetEl("inspector-visible") as HTMLInputElement; // Checkbox controlling Object3D.visible.
@@ -77,9 +81,34 @@ export function initInspectorUi(editor: Editor): void {
     content.hidden = !hasSelection; // Show controls only when selection exists.
   };
 
+  selectRootBtn.addEventListener("click", () => editor.selectRoot()); // Convenience: jump back to whole-model selection.
+
   const syncTransformInputs = () => {
     // Write the selected object's transform into the numeric inputs.
-    if (!selected) return; // Guard: no selection.
+    const selectionCount = editor.getSelectionCount(); // Multi-selection aware selection size.
+    if (!selected || selectionCount !== 1) {
+      // Multi-selection: show "mixed" placeholders and keep numeric inputs disabled.
+      const mixed = "—"; // Simple placeholder string for mixed values.
+      posX.value = ""; // Clear value so placeholder is visible.
+      posY.value = ""; // Clear value.
+      posZ.value = ""; // Clear value.
+      rotX.value = ""; // Clear value.
+      rotY.value = ""; // Clear value.
+      rotZ.value = ""; // Clear value.
+      scaleX.value = ""; // Clear value.
+      scaleY.value = ""; // Clear value.
+      scaleZ.value = ""; // Clear value.
+      posX.placeholder = mixed; // Show mixed placeholder.
+      posY.placeholder = mixed; // Show mixed placeholder.
+      posZ.placeholder = mixed; // Show mixed placeholder.
+      rotX.placeholder = mixed; // Show mixed placeholder.
+      rotY.placeholder = mixed; // Show mixed placeholder.
+      rotZ.placeholder = mixed; // Show mixed placeholder.
+      scaleX.placeholder = mixed; // Show mixed placeholder.
+      scaleY.placeholder = mixed; // Show mixed placeholder.
+      scaleZ.placeholder = mixed; // Show mixed placeholder.
+      return; // Done.
+    }
 
     posX.value = formatNumber(selected.position.x, 3); // Sync position X.
     posY.value = formatNumber(selected.position.y, 3); // Sync position Y.
@@ -154,15 +183,39 @@ export function initInspectorUi(editor: Editor): void {
   };
 
   const syncInspector = () => {
-    // Sync the entire inspector UI from the current `selected` reference.
-    const hasSelection = Boolean(selected); // Convert selection object to a boolean for view toggles.
+    // Sync the entire inspector UI from the current `selected` reference and selection set state.
+    const selectionCount = editor.getSelectionCount(); // Multi-selection aware count.
+    const hasSelection = selectionCount > 0; // Selection exists when the selection list is non-empty.
+    const isMulti = selectionCount > 1; // Multi-selection mode.
     setInspectorVisible(hasSelection); // Toggle empty/content views.
     if (!hasSelection) return; // If nothing selected, no further syncing is needed.
 
+    selectionSummary.textContent =
+      selectionCount === 1 ? "1 object selected" : `${selectionCount} objects selected`; // Show a compact selection summary.
+    multiHint.hidden = !isMulti; // Show multi-selection hint only when needed.
+
     isSyncing = true; // Start guarded sync section.
-    nameInput.value = selected?.name ?? ""; // Sync object name (empty string is allowed).
-    typeValue.textContent = selected?.type ?? "—"; // Sync type display.
-    visibleInput.checked = selected?.visible ?? true; // Sync visibility checkbox.
+    nameInput.disabled = isMulti; // Disable per-object name editing when multiple objects are selected.
+    nameInput.value = isMulti ? "—" : (selected?.name ?? ""); // Show a mixed placeholder for multi-selection.
+    typeValue.textContent = isMulti ? "Multiple" : (selected?.type ?? "—"); // Show a clear multi-selection label.
+
+    const all = editor.getSelectionAll(); // Read full selection list for mixed-state detection.
+    if (all.length > 0) {
+      // Compute visibility mixed state across the selection set.
+      const first = all[0]?.visible ?? true; // First visibility value becomes the baseline.
+      const same = all.every((o) => o.visible === first); // True if all visibilities match.
+      visibleInput.indeterminate = !same; // Use the native indeterminate state to show "mixed".
+      visibleInput.checked = same ? first : true; // When mixed, keep checked true so indeterminate is visible.
+    } else {
+      // Defensive fallback (should not happen when hasSelection is true).
+      visibleInput.indeterminate = false; // Not mixed.
+      visibleInput.checked = true; // Default.
+    }
+
+    const transformEnabled = !isMulti; // Numeric transform editing is single-selection only (multi uses gizmo workflow).
+    const transformInputs = [posX, posY, posZ, rotX, rotY, rotZ, scaleX, scaleY, scaleZ]; // All transform inputs.
+    transformInputs.forEach((input) => (input.disabled = !transformEnabled)); // Enable/disable inputs as a group.
+
     syncTransformInputs(); // Sync position/rotation/scale inputs.
     syncMaterialUi(); // Sync material editor section.
     isSyncing = false; // End guarded sync section.
@@ -263,8 +316,11 @@ export function initInspectorUi(editor: Editor): void {
   visibleInput.addEventListener("change", () => {
     // Update Object3D.visible when the checkbox is toggled.
     if (isSyncing) return; // Ignore events fired during sync.
-    if (!selected) return; // Guard: nothing selected.
-    selected.visible = visibleInput.checked; // Update Three.js visibility flag.
+    const all = editor.getSelectionAll(); // Apply to all selected objects (multi-selection aware).
+    if (all.length === 0) return; // Guard: nothing selected.
+    visibleInput.indeterminate = false; // User action resolves indeterminate state.
+    for (const obj of all) obj.visible = visibleInput.checked; // Apply the same visibility to all selected objects.
+    editor.notifySelectionUpdated(); // Notify UI so hierarchy/inspector stay in sync.
   });
 
   const bindNumber = (
@@ -275,7 +331,8 @@ export function initInspectorUi(editor: Editor): void {
     input.addEventListener("input", () => {
       // React while the user edits the number.
       if (isSyncing) return; // Ignore programmatic changes.
-      if (!selected) return; // Guard: no selection.
+      if (!selected) return; // Guard: no primary selection.
+      if (editor.getSelectionCount() !== 1) return; // Numeric editing is single-selection only (multi uses gizmo transforms).
       const value = Number(input.value); // Parse input string to number.
       if (!Number.isFinite(value)) return; // Ignore NaN/Infinity.
       apply(value); // Apply to the scene object.
@@ -284,7 +341,8 @@ export function initInspectorUi(editor: Editor): void {
 
   const beginTransformEdit = () => {
     // Capture a "before" snapshot when the user focuses any transform input.
-    if (!selected) return; // Guard: no selection means nothing to record.
+    if (!selected) return; // Guard: no primary selection means nothing to record.
+    if (editor.getSelectionCount() !== 1) return; // Only record numeric edits for single selection.
     transformEditObject = selected; // Record which object is being edited.
     transformEditStart = captureTransform(selected); // Snapshot starting transform for undo.
   };
@@ -380,7 +438,8 @@ export function initInspectorUi(editor: Editor): void {
   editor.onSelectionChange((selection) => {
     // Update inspector when selection changes (new object selected or cleared).
     selected = selection; // Store current selection reference.
-    selectedMesh = selection && (selection as THREE.Mesh).isMesh ? (selection as THREE.Mesh) : null; // Cache mesh selection.
+    const selectionCount = editor.getSelectionCount(); // Read selection count from Editor (multi-selection aware).
+    selectedMesh = selectionCount === 1 && selection && (selection as THREE.Mesh).isMesh ? (selection as THREE.Mesh) : null; // Only enable material editing for single selection.
     meshMaterials = selectedMesh ? getMeshMaterials(selectedMesh) : []; // Cache materials array for selected mesh.
     materialIndex = 0; // Reset slot to 0 on new selection (simple and predictable).
     nameEditStart = null; // Clear pending rename history state when selection changes.
@@ -397,8 +456,22 @@ export function initInspectorUi(editor: Editor): void {
     if (!selected) return; // Guard: no selection.
     if (isTextEditingActive(content)) return; // Avoid fighting the user's typing focus.
     isSyncing = true; // Guard input events while we update fields.
-    nameInput.value = selected.name; // Keep name input in sync (important for undo/redo rename).
-    visibleInput.checked = selected.visible; // Keep visibility checkbox in sync (future-proof for undo/redo).
+    const selectionCount = editor.getSelectionCount(); // Multi-selection aware count.
+    const isMulti = selectionCount > 1; // Multi-selection flag.
+    selectionSummary.textContent =
+      selectionCount === 1 ? "1 object selected" : `${selectionCount} objects selected`; // Keep summary fresh while transforming.
+    multiHint.hidden = !isMulti; // Toggle hint.
+    nameInput.disabled = isMulti; // Disable name field for multi-selection.
+    nameInput.value = isMulti ? "—" : selected.name; // Show mixed placeholder for multi-selection.
+
+    const all = editor.getSelectionAll(); // Use selection list to compute mixed visibility.
+    if (all.length > 0) {
+      const first = all[0]?.visible ?? true; // Baseline.
+      const same = all.every((o) => o.visible === first); // All same?
+      visibleInput.indeterminate = !same; // Mixed state.
+      visibleInput.checked = same ? first : true; // Keep checked true when mixed so indeterminate is visible.
+    }
+
     syncTransformInputs(); // Update position/rotation/scale inputs to match the live selection.
     syncMaterialUi(); // Refresh material UI (material properties could change via other tooling later).
     isSyncing = false; // End guarded sync.
@@ -406,7 +479,8 @@ export function initInspectorUi(editor: Editor): void {
 
   // Initialize inspector from the current editor selection (important if init order changes).
   selected = editor.getSelection(); // Read current selection.
-  selectedMesh = selected && (selected as THREE.Mesh).isMesh ? (selected as THREE.Mesh) : null; // Cache mesh selection if applicable.
+  selectedMesh =
+    editor.getSelectionCount() === 1 && selected && (selected as THREE.Mesh).isMesh ? (selected as THREE.Mesh) : null; // Cache mesh selection only for single selection.
   meshMaterials = selectedMesh ? getMeshMaterials(selectedMesh) : []; // Cache initial materials.
   syncInspector(); // Initial UI sync.
 }

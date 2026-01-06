@@ -12,6 +12,7 @@
 // - avoiding extra state libraries keeps learning value high
 
 export type ToolModeSetting = "select" | "move" | "rotate" | "scale"; // Tool modes we persist for the editor toolbar.
+export type PivotModeSetting = "pivot" | "center"; // Gizmo pivot placement modes we persist for the editor toolbar.
 
 export type ToolsSettings = {
   toolMode: ToolModeSetting; // Which tool is active (Select/Move/Rotate/Scale).
@@ -22,6 +23,10 @@ export type ToolsSettings = {
   nudgeStep: number; // Arrow-key nudge step.
   gizmoSize: number; // TransformControls visual size multiplier.
   localSpace: boolean; // True = local space, false = world space.
+  pivotMode: PivotModeSetting; // Where the gizmo is placed: object pivot or selection bounds center.
+  axisX: boolean; // Whether the X axis is enabled on TransformControls.
+  axisY: boolean; // Whether the Y axis is enabled on TransformControls.
+  axisZ: boolean; // Whether the Z axis is enabled on TransformControls.
   unityAltOrbit: boolean; // When true, use an editor-friendly orbit mapping (MMB pan / RMB dolly).
   flyEnabled: boolean; // Fly mode toggle.
   flySpeed: number; // Fly movement speed in world units/second.
@@ -61,6 +66,10 @@ const DEFAULT_SETTINGS: AppSettingsV1 = {
     nudgeStep: 0.05,
     gizmoSize: 1,
     localSpace: true,
+    pivotMode: "pivot",
+    axisX: true,
+    axisY: true,
+    axisZ: true,
     unityAltOrbit: true,
     flyEnabled: false,
     flySpeed: 3,
@@ -164,6 +173,10 @@ function coerceSettings(value: unknown): AppSettingsV1 {
   base.tools.nudgeStep = coerceNumber(tools.nudgeStep, base.tools.nudgeStep, 0, 1_000); // Nudge step.
   base.tools.gizmoSize = coerceNumber(tools.gizmoSize, base.tools.gizmoSize, 0.01, 10); // Gizmo size multiplier.
   base.tools.localSpace = coerceBool(tools.localSpace, base.tools.localSpace); // Local/world.
+  base.tools.pivotMode = coercePivotMode(tools.pivotMode, base.tools.pivotMode); // Pivot/center.
+  base.tools.axisX = coerceBool(tools.axisX, base.tools.axisX); // Axis X.
+  base.tools.axisY = coerceBool(tools.axisY, base.tools.axisY); // Axis Y.
+  base.tools.axisZ = coerceBool(tools.axisZ, base.tools.axisZ); // Axis Z.
   base.tools.unityAltOrbit = coerceBool(tools.unityAltOrbit, base.tools.unityAltOrbit); // Unity-like Alt navigation.
   base.tools.flyEnabled = coerceBool(tools.flyEnabled, base.tools.flyEnabled); // Fly mode toggle.
   base.tools.flySpeed = coerceNumber(tools.flySpeed, base.tools.flySpeed, 0.01, 1_000); // Fly speed.
@@ -198,6 +211,12 @@ function coerceNumber(value: unknown, fallback: number, min: number, max: number
 function coerceToolMode(value: unknown, fallback: ToolModeSetting): ToolModeSetting {
   // Convert an unknown value into a valid tool mode union.
   if (value === "select" || value === "move" || value === "rotate" || value === "scale") return value; // Accept known strings.
+  return fallback; // Fall back to previous/default.
+}
+
+function coercePivotMode(value: unknown, fallback: PivotModeSetting): PivotModeSetting {
+  // Convert an unknown value into a valid pivot mode union.
+  if (value === "pivot" || value === "center") return value; // Accept known strings.
   return fallback; // Fall back to previous/default.
 }
 

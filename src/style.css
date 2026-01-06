@@ -260,6 +260,10 @@ html, body { /* Make the page fill the viewport and match the app's dark theme. 
   background: rgba(122, 162, 247, 0.12); /* Soft accent fill. */
 } /* End .tree-item.is-selected. */
 
+.tree-item.is-primary { /* Primary selection (last selected) gets a stronger emphasis. */
+  box-shadow: 0 0 0 2px rgba(122, 162, 247, 0.22); /* A subtle halo to stand out among multi-selection. */
+} /* End .tree-item.is-primary. */
+
 .tree-item.is-hidden { /* Dim hidden nodes so visibility state is obvious. */
   opacity: 0.65; /* Lower opacity to communicate hidden state. */
 } /* End .tree-item.is-hidden. */
@@ -409,6 +413,39 @@ html, body { /* Make the page fill the viewport and match the app's dark theme. 
   color: rgba(255, 255, 255, 0.85); /* Slightly brighter label text. */
   user-select: none; /* Prevent accidental text selection while clicking. */
 } /* End .checkbox. */
+
+.axis-toggles { /* Compact axis toggles used to enable/disable TransformControls axes. */
+  display: flex; /* Lay out X/Y/Z chips horizontally. */
+  gap: 8px; /* Space between chips. */
+  align-items: center; /* Align with the field label baseline. */
+  justify-content: flex-start; /* Keep chips left-aligned. */
+} /* End .axis-toggles. */
+
+.axis-chip { /* Small pill-like checkbox label for an axis toggle. */
+  display: inline-flex; /* Keep checkbox and text on one line. */
+  align-items: center; /* Vertically center contents. */
+  gap: 6px; /* Space between checkbox and label. */
+  padding: 4px 8px; /* Small padding to create a chip feel. */
+  border-radius: 999px; /* Full rounding for a pill. */
+  border: 1px solid rgba(255, 255, 255, 0.14); /* Subtle border. */
+  background: rgba(255, 255, 255, 0.05); /* Slight fill on dark UI. */
+  cursor: pointer; /* Clickable. */
+  user-select: none; /* Avoid selecting text while clicking. */
+  color: rgba(255, 255, 255, 0.9); /* Keep axis letters readable. */
+  font-size: 13px; /* Match field label sizing. */
+} /* End .axis-chip. */
+
+.axis-chip input { /* Checkbox inside axis chip. */
+  margin: 0; /* Remove default checkbox margins for tighter layout. */
+} /* End .axis-chip input. */
+
+.inspector-meta { /* Small header row inside the Inspector panel. */
+  display: flex; /* Place summary and button on one line. */
+  align-items: center; /* Vertically center. */
+  justify-content: space-between; /* Push button to the right. */
+  gap: 10px; /* Space if it wraps on small widths. */
+  margin-bottom: 10px; /* Space below meta row. */
+} /* End .inspector-meta. */
 
 .viewport { /* Container that holds the WebGL canvas. */
   position: relative; /* Establish positioning context if overlays are added later. */

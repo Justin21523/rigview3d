@@ -129,17 +129,15 @@ export function initEditorUi(viewer: Viewer, editor: Editor): void {
           undo: () => (object.visible = before),
           redo: () => (object.visible = after),
         });
-        if (selection && selection.uuid === object.uuid) editor.notifySelectionUpdated(); // Refresh inspector if this object is selected.
+        if (editor.isSelected(object)) editor.notifySelectionUpdated(); // Refresh inspector if this object is currently selected.
         render(); // Re-render so the eye icon updates.
       });
       row.appendChild(eye); // Add eye toggle.
 
       if (!object.visible) row.classList.add("is-hidden"); // Dim hidden nodes for clarity.
 
-      if (selection && selection.uuid === object.uuid) {
-        // If this row corresponds to the selected object...
-        row.classList.add("is-selected"); // ...apply selected styling.
-      }
+      if (editor.isSelected(object)) row.classList.add("is-selected"); // Apply selected styling for any selected node (multi-selection).
+      if (selection && selection.uuid === object.uuid) row.classList.add("is-primary"); // Primary selection gets a stronger highlight.
 
       row.addEventListener("contextmenu", (e) => {
         // Right-click opens a Unity-like context menu.
@@ -162,7 +160,7 @@ export function initEditorUi(viewer: Viewer, editor: Editor): void {
                 undo: () => (object.name = before),
                 redo: () => (object.name = next),
               });
-              if (selection && selection.uuid === object.uuid) editor.notifySelectionUpdated(); // Refresh inspector name.
+              if (editor.isSelected(object)) editor.notifySelectionUpdated(); // Refresh inspector name if this object is selected.
               render(); // Re-render to refresh label.
             },
           },
@@ -225,8 +223,9 @@ export function initEditorUi(viewer: Viewer, editor: Editor): void {
     if (pointerMoved) return; // Ignore if the pointer moved (likely camera orbit).
 
     editor.pick(e.clientX, e.clientY, {
-      // Default to "whole model" selection; hold Shift/Ctrl/Cmd for exact object selection.
-      exact: e.shiftKey || e.ctrlKey || e.metaKey,
+      // Default to "whole model" selection; Ctrl/Cmd selects the exact hit object; Shift toggles multi-selection.
+      exact: e.shiftKey || e.ctrlKey || e.metaKey, // Shift implies exact so multi-select works on real nodes instead of the root.
+      toggle: e.shiftKey, // Shift toggles membership in the current selection set.
     });
   });
 
@@ -238,12 +237,13 @@ export function initEditorUi(viewer: Viewer, editor: Editor): void {
 
   tree.addEventListener("click", (e) => {
     // Clicking a hierarchy row selects that Object3D.
+    const mouse = e as MouseEvent; // We need modifier keys (Shift) for multi-selection toggles.
     const target = e.target as HTMLElement | null; // The clicked element.
     const row = target?.closest(".tree-item") as HTMLElement | null; // Find the nearest row wrapper.
     if (!row) return; // Ignore clicks on the empty state or padding.
     const uuid = row.dataset.uuid; // Read uuid stored on the row.
     const object = uuid ? uuidToObject.get(uuid) ?? null : null; // Look up the Object3D for that uuid.
-    editor.select(object); // Update core selection state (also updates selection outline + inspector later).
+    editor.select(object, { toggle: mouse.shiftKey }); // Replace selection by default; Shift toggles multi-selection membership.
   });
 
   searchInput.addEventListener("input", () => {

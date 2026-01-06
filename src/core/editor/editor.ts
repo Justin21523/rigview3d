@@ -26,12 +26,17 @@ export type SelectionUpdatedListener = (selection: THREE.Object3D) => void; // L
 export type ToolMode = "select" | "move" | "rotate" | "scale"; // Tool modes exposed to the UI (Unity-style Q/W/E/R mapping).
 export type ToolModeChangeListener = (mode: ToolMode) => void; // Listener type for tool mode changes.
 
+export type PivotMode = "pivot" | "center"; // Gizmo pivot placement: object pivot or selection bounds center.
+export type AxisVisibility = { x: boolean; y: boolean; z: boolean }; // Which axes are enabled on TransformControls.
+
 export class Editor {
   // The Editor coordinates selection state and editor-only helpers.
   private readonly viewer: Viewer; // Reference to Viewer for camera/scene/domElement access.
 
   private modelRoot: THREE.Object3D | null = null; // The current editable model root (null when no model loaded).
   private selection: THREE.Object3D | null = null; // The currently selected object inside the model root.
+  private selectionList: THREE.Object3D[] = []; // Ordered list of selected objects (last = primary selection).
+  private readonly selectionSet = new Set<THREE.Object3D>(); // Set for fast "is selected" checks.
   private hover: THREE.Object3D | null = null; // The currently hovered object (used for non-committal hover feedback).
   private sourceFileName: string | null = null; // The original filename of the loaded asset (used as a default export name).
 
@@ -48,6 +53,23 @@ export class Editor {
   private isDraggingTransform = false; // True while the gizmo is actively dragging (used to avoid accidental picking).
   private gizmoStart: TransformSnapshot | null = null; // Transform snapshot captured at the start of a gizmo drag.
   private gizmoObject: THREE.Object3D | null = null; // Object that was being manipulated when the gizmo drag started.
+
+  private pivotMode: PivotMode = "pivot"; // Whether the gizmo uses object pivot or selection bounds center.
+  private axisVisibility: AxisVisibility = { x: true, y: true, z: true }; // Axis toggles for TransformControls (showX/showY/showZ).
+
+  private readonly selectionProxy = new THREE.Object3D(); // Proxy object used for multi-selection and center-pivot transforms.
+  private proxyDragActive = false; // True while TransformControls is dragging the selection proxy.
+  private proxyDragObjects: THREE.Object3D[] = []; // Objects affected by the current proxy drag session.
+  private proxyDragBefore: TransformSnapshot[] = []; // "Before" snapshots for all affected objects.
+  private proxyDragStartWorld = new THREE.Matrix4(); // Proxy world matrix at the start of the drag.
+  private proxyDragObjectStartWorld: THREE.Matrix4[] = []; // World matrices of affected objects at drag start.
+
+  private readonly tmpBox = new THREE.Box3(); // Reused Box3 for bounds calculations (avoids per-frame allocations).
+  private readonly tmpBox2 = new THREE.Box3(); // Reused Box3 for per-object bounds in bounds union.
+  private readonly tmpVec3 = new THREE.Vector3(); // Reused Vector3 for center/pivot calculations.
+  private readonly tmpMat4a = new THREE.Matrix4(); // Reused Matrix4 for delta computations.
+  private readonly tmpMat4b = new THREE.Matrix4(); // Reused Matrix4 for inverse/compose computations.
+  private readonly tmpMat4c = new THREE.Matrix4(); // Reused Matrix4 for parent inverse computations.
 
   private snapEnabled = false; // Whether snapping is enabled for TransformControls.
   private translationSnap = 0.1; // World units per snap step for translation.
@@ -92,11 +114,20 @@ export class Editor {
       // This event fires when the attached object's transform changed (move/rotate/scale).
       const selection = this.selection; // Snapshot selection into a local variable for type-narrowing safety.
       if (!selection) return; // Guard: no selection means nothing to notify.
+      if (this.proxyDragActive) {
+        // While dragging the selection proxy, apply the proxy delta to all selected objects.
+        this.applyProxyDrag(); // Apply delta transform to the selection set.
+      }
       this.selectionUpdatedListeners.forEach((fn) => fn(selection)); // Notify UI so Inspector fields can live-update.
     });
 
     this.transformControls.addEventListener("mouseDown", () => {
       // Capture a "before" transform snapshot when the user begins a gizmo drag.
+      if (this.isSelectionProxyAttached()) {
+        // Proxy mode: capture multi-selection state for group transforms.
+        this.beginProxyDrag(); // Capture "before" snapshots and world matrices for multi-selection transform.
+        return; // Done.
+      }
       const selection = this.selection; // Snapshot current selection.
       if (!selection) return; // Guard: no selection means nothing to record.
       this.gizmoObject = selection; // Record which object is being manipulated.
@@ -105,6 +136,11 @@ export class Editor {
 
     this.transformControls.addEventListener("mouseUp", (e) => {
       // When the gizmo drag ends, push an undoable transform command if anything changed.
+      if (this.proxyDragActive) {
+        // Proxy mode: commit a multi-object history entry.
+        this.commitProxyDrag(e); // Push an undoable command for all affected objects.
+        return; // Done.
+      }
       const object = this.gizmoObject; // Read the object that was manipulated.
       const before = this.gizmoStart; // Read the captured start snapshot.
       this.gizmoObject = null; // Clear state so the next drag starts fresh.
@@ -170,6 +206,21 @@ export class Editor {
     return this.selection; // Return the selected object (or null if none).
   }
 
+  public getSelectionCount(): number {
+    // Return how many objects are currently selected (multi-selection aware).
+    return this.selectionList.length; // Selection list is the single source of truth for multi-selection size.
+  }
+
+  public getSelectionAll(): THREE.Object3D[] {
+    // Return a copy of the current selection list (order: last item is primary selection).
+    return [...this.selectionList]; // Return a shallow copy so callers cannot mutate internal state.
+  }
+
+  public isSelected(object: THREE.Object3D): boolean {
+    // Return true if the given object is part of the current selection set.
+    return this.selectionSet.has(object); // Set lookup is O(1) and avoids uuid string maps.
+  }
+
   public getHover(): THREE.Object3D | null {
     // Expose the current hovered object (used by UI for cursor feedback).
     return this.hover; // Return the hovered object (or null if none).
@@ -191,6 +242,7 @@ export class Editor {
     // Manually notify that the selected object changed without changing selection (used by the Inspector).
     const selection = this.selection; // Snapshot selection into a local variable for type-narrowing safety.
     if (!selection) return; // No selection means nothing to notify.
+    this.syncTransformControls(); // Keep gizmo/proxy aligned after programmatic transform edits (e.g., inspector values).
     this.selectionUpdatedListeners.forEach((fn) => fn(selection)); // Notify all listeners with the current selection.
   }
 
@@ -231,45 +283,70 @@ export class Editor {
   public undo(): void {
     // Undo the most recent editor command.
     this.history.undo(); // Undo the command via the history stack.
+    this.syncTransformControls(); // Keep gizmo/proxy aligned after undo (important for center pivot and multi-selection).
     this.notifySelectionUpdated(); // Refresh inspector values if the selected object was affected.
   }
 
   public redo(): void {
     // Redo the most recently undone editor command.
     this.history.redo(); // Redo the command via the history stack.
+    this.syncTransformControls(); // Keep gizmo/proxy aligned after redo (important for center pivot and multi-selection).
     this.notifySelectionUpdated(); // Refresh inspector values if the selected object was affected.
   }
 
   public deleteSelection(): void {
     // Delete the currently selected object from the model hierarchy (undoable).
-    const selection = this.selection; // Snapshot selection.
-    if (!selection) return; // Guard: nothing to delete.
-    if (this.modelRoot && selection === this.modelRoot) return; // Do not allow deleting the model root (too destructive).
+    const selected = [...this.selectionList]; // Snapshot selection list (multi-selection aware).
+    if (selected.length === 0) return; // Guard: nothing to delete.
 
-    const parent = selection.parent; // Read current parent (needed to remove and restore).
-    if (!parent) return; // Guard: cannot delete objects that are not attached.
+    const targets = selected.filter((o) => !(this.modelRoot && o === this.modelRoot)); // Never allow deleting the model root.
+    if (targets.length === 0) return; // Selection contained only the model root (or nothing deletable).
 
-    const index = parent.children.indexOf(selection); // Record the original index for stable undo ordering.
-    parent.remove(selection); // Remove from scene graph (stops rendering and updating).
+    type DeleteItem = { object: THREE.Object3D; parent: THREE.Object3D; index: number }; // Data needed to undo/redo.
+    const items: DeleteItem[] = []; // Ordered list of deletions (preserves selection order for undo reselect).
+
+    for (const object of targets) {
+      // Record each object's parent/index so we can restore it later.
+      const parent = object.parent; // Parent is required to remove/restore.
+      if (!parent) continue; // Skip objects that are already detached.
+      const index = parent.children.indexOf(object); // Record sibling index for stable undo ordering.
+      items.push({ object, parent, index }); // Add to the deletion list.
+    }
+
+    if (items.length === 0) return; // Nothing was attached, so nothing to delete.
+
+    // Apply deletion immediately.
+    for (const { object, parent } of items) parent.remove(object); // Remove from scene graph (stops rendering and updating).
     this.clearSelection(); // Clear selection so gizmos/outline detach cleanly.
 
-    const restoreAtIndex = () => {
-      // Helper: re-add the object and restore its original sibling order as best as possible.
-      parent.add(selection); // Add back to parent (Three.js will append by default).
-      moveChildToIndex(parent, selection, index); // Reorder children array to restore the original index.
+    const restoreAll = () => {
+      // Restore all deleted objects and their sibling order.
+      for (const { object, parent, index } of items) {
+        parent.add(object); // Re-attach under the same parent.
+        moveChildToIndex(parent, object, index); // Attempt to restore original sibling ordering.
+      }
+    };
+
+    const removeAll = () => {
+      // Remove all objects again (redo).
+      for (const { object, parent } of items) parent.remove(object); // Detach again.
     };
 
     this.history.push({
-      // Push an undoable delete command.
+      // Push a single undoable delete command that handles multi-selection.
       label: "Delete", // Label for history UI.
       undo: () => {
-        // Undo re-adds the object and re-selects it.
-        restoreAtIndex(); // Restore object into the hierarchy.
-        this.select(selection); // Reselect so the user can continue editing.
+        // Undo re-adds all objects and restores multi-selection.
+        restoreAll(); // Restore objects into the hierarchy.
+        if (items.length > 0) {
+          // Re-select restored objects in the original order (last becomes primary).
+          this.select(items[0].object); // Start selection with the first object.
+          for (let i = 1; i < items.length; i++) this.select(items[i].object, { additive: true }); // Add remaining objects.
+        }
       },
       redo: () => {
-        // Redo removes the object again and clears selection.
-        parent.remove(selection); // Remove again.
+        // Redo removes objects again and clears selection.
+        removeAll(); // Remove again.
         this.clearSelection(); // Clear selection for consistency.
       },
     });
@@ -347,11 +424,39 @@ export class Editor {
     // Set whether the gizmo operates in local space or world space.
     this.space = space; // Store space setting.
     this.applyTransformSettings(); // Apply to TransformControls immediately.
+    this.syncTransformControls(); // Re-anchor proxy orientation when switching spaces (important for multi-selection/center pivot).
   }
 
   public getSpace(): "local" | "world" {
     // Expose current gizmo space so UI can stay in sync.
     return this.space; // Return the current space string.
+  }
+
+  public setPivotMode(mode: PivotMode): void {
+    // Set whether the gizmo is anchored at the object pivot or at the selection bounds center.
+    if (this.pivotMode === mode) return; // No-op if unchanged.
+    this.pivotMode = mode; // Store pivot mode.
+    this.syncTransformControls(); // Re-anchor the gizmo (switches between direct attach and proxy attach).
+  }
+
+  public getPivotMode(): PivotMode {
+    // Expose current pivot mode for UI initialization.
+    return this.pivotMode; // Return current mode.
+  }
+
+  public setAxisVisibility(visibility: AxisVisibility): void {
+    // Enable/disable TransformControls X/Y/Z axes.
+    this.axisVisibility = {
+      x: Boolean(visibility.x), // Coerce to strict boolean.
+      y: Boolean(visibility.y), // Coerce.
+      z: Boolean(visibility.z), // Coerce.
+    };
+    this.applyTransformSettings(); // Apply to TransformControls immediately.
+  }
+
+  public getAxisVisibility(): AxisVisibility {
+    // Expose axis visibility state for UI initialization.
+    return { ...this.axisVisibility }; // Return a copy so callers can't mutate internal state.
   }
 
   public setNudgeStep(step: number): void {
@@ -377,16 +482,69 @@ export class Editor {
     return this.gizmoSize; // Return current size.
   }
 
-  public select(object: THREE.Object3D | null): void {
+  public select(
+    object: THREE.Object3D | null, // Object to select, or null to clear selection.
+    options: { toggle?: boolean; additive?: boolean } = {}, // Multi-selection options (toggle/additive).
+  ): void {
     // Select an object inside the current model, or pass null to clear selection.
+    //
+    // Selection rules used by the UI:
+    // - Default click: replace selection (single select).
+    // - Shift+click: toggle selection membership (multi-select).
+    // - Ctrl/Cmd+click: exact pick but still replaces selection (handled by UI pick options).
+    if (this.isDraggingTransform) return; // Avoid selection changes while the gizmo is mid-drag.
+
     if (object && this.modelRoot && !isDescendantOrSelf(object, this.modelRoot)) {
       // Defensive guard: ignore selections that do not belong to the current model root.
       return; // This prevents accidental selection of helpers or stale objects from previous loads.
     }
 
-    if (this.selection === object) return; // No-op if selection is unchanged.
-    this.selection = object; // Store new selection.
-    this.clearHover(); // Clear hover highlight so we never show double outlines on the selected object.
+    const prev = this.selectionList; // Snapshot current ordered selection for change detection.
+
+    let next: THREE.Object3D[]; // Next ordered selection list.
+    if (!object) {
+      // Null means clear selection entirely.
+      next = []; // Empty selection.
+    } else if (options.toggle) {
+      // Toggle mode: if already selected -> remove; otherwise add.
+      const onlyRootSelected =
+        this.modelRoot && prev.length === 1 && prev[0] === this.modelRoot && object !== this.modelRoot; // Convenience: drop root when starting multi-select.
+      const base = onlyRootSelected ? [] : [...prev]; // Start from current selection unless we drop the root-only special case.
+      const idx = base.indexOf(object); // Find existing selection index (if any).
+      if (idx !== -1) base.splice(idx, 1); // Toggle off by removing it.
+      else base.push(object); // Toggle on by adding it (becomes primary).
+      next = base; // Store computed list.
+    } else if (options.additive) {
+      // Additive mode: add object if missing; if present, make it primary by moving to the end.
+      const base = [...prev]; // Start from current list.
+      const idx = base.indexOf(object); // Find existing entry.
+      if (idx !== -1) {
+        // Already selected: move to end so it becomes the primary selection.
+        base.splice(idx, 1); // Remove from current position.
+        base.push(object); // Re-add at end.
+      } else {
+        // Not selected yet: add it.
+        base.push(object); // Append.
+      }
+      next = base; // Store computed list.
+    } else {
+      // Default: replace selection with just this object.
+      next = [object]; // Single selection.
+    }
+
+    next = normalizeSelection(next); // Remove duplicates and prevent selecting both a parent and its descendant.
+
+    if (prev.length === next.length && prev.every((o, i) => o === next[i])) {
+      // If selection order did not change, treat as a no-op.
+      return; // Avoid extra helper/gizmo churn.
+    }
+
+    // Apply new selection state.
+    this.selectionList = next; // Store ordered selection.
+    this.selectionSet.clear(); // Reset membership set.
+    next.forEach((o) => this.selectionSet.add(o)); // Rebuild membership set from the ordered list.
+    this.selection = next.length > 0 ? next[next.length - 1] : null; // Primary selection is last item.
+    this.clearHover(); // Clear hover highlight so we never show double outlines on selected objects.
 
     if (!this.selection) {
       // If selection is cleared...
@@ -396,14 +554,20 @@ export class Editor {
       return; // Done.
     }
 
-    this.ensureSelectionHelper(this.selection); // Create (or retarget) the BoxHelper to the new selection.
-    this.syncTransformControls(); // Attach gizmo to selection if the current tool mode requires it.
-    this.selectionListeners.forEach((fn) => fn(this.selection)); // Notify listeners of the new selection.
+    this.ensureSelectionHelper(this.selection); // Create (or retarget) the BoxHelper to the new primary selection.
+    this.syncTransformControls(); // Attach gizmo to selection (or proxy) if the current tool mode requires it.
+    this.selectionListeners.forEach((fn) => fn(this.selection)); // Notify listeners of the new primary selection.
   }
 
   public clearSelection(): void {
     // Convenience wrapper to clear selection state.
     this.select(null); // Delegate to select(null) so listeners/helper cleanup happen consistently.
+  }
+
+  public selectRoot(): void {
+    // Convenience helper used by the Inspector: select the current model root (whole-model transforms).
+    if (!this.modelRoot) return; // Guard: no model loaded.
+    this.select(this.modelRoot); // Replace selection with the model root.
   }
 
   public hoverAt(clientX: number, clientY: number): void {
@@ -439,8 +603,8 @@ export class Editor {
       return; // Done.
     }
 
-    if (this.selection && next.uuid === this.selection.uuid) {
-      // Avoid drawing both hover and selection outlines on the same object (looks noisy).
+    if (this.selectionSet.has(next)) {
+      // Avoid drawing hover outlines on already-selected objects (keeps the viewport less noisy).
       this.clearHover(); // Selection outline already communicates focus.
       return; // Done.
     }
@@ -463,7 +627,7 @@ export class Editor {
   public pick(
     clientX: number, // Pointer X in client (viewport) coordinates.
     clientY: number, // Pointer Y in client (viewport) coordinates.
-    options: { exact?: boolean } = {}, // Options to control what gets selected.
+    options: { exact?: boolean; toggle?: boolean } = {}, // Options to control what gets selected.
   ): void {
     // Raycast from a screen point (mouse coordinates) and select a hit object.
     if (!this.modelRoot) return; // Without a model root there is nothing to pick.
@@ -482,18 +646,19 @@ export class Editor {
     const hit = hits[0]; // Take the closest hit (Three.js sorts by distance).
     if (!hit) {
       // If we didn't hit anything...
-      this.clearSelection(); // ...clear selection (Unity-like behavior).
+      if (options.toggle) return; // Shift-click empty space should not destroy an existing multi-selection.
+      this.clearSelection(); // Otherwise clear selection (Unity-like behavior).
       return; // Done.
     }
 
     if (options.exact) {
       // Exact mode selects the specific mesh/object under the cursor.
-      this.select(hit.object); // Select the actual hit object.
+      this.select(hit.object, { toggle: options.toggle }); // Select or toggle the actual hit object.
       return; // Done.
     }
 
     // Default mode selects the model root so transforms move the whole character/model (beginner-friendly).
-    this.select(this.modelRoot); // Select the model root for whole-model transforms.
+    this.select(this.modelRoot, { toggle: options.toggle }); // Select the model root for whole-model transforms.
   }
 
   public update(): void {
@@ -512,6 +677,8 @@ export class Editor {
     this.viewer.getScene().remove(this.transformControls); // Remove gizmo from the scene graph.
     this.transformControls.dispose(); // Remove event listeners and dispose gizmo geometry/materials.
     this.selection = null; // Clear selection reference.
+    this.selectionList = []; // Clear multi-selection ordered list.
+    this.selectionSet.clear(); // Clear selection membership set.
     this.hover = null; // Clear hover reference.
     this.modelRoot = null; // Clear root reference.
     this.sourceFileName = null; // Clear stored filename.
@@ -534,12 +701,16 @@ export class Editor {
       this.viewer.setOrbitEnabled(true); // Re-enable orbit camera so the viewport doesn't feel "dead".
       this.gizmoObject = null; // Drop any in-progress snapshot state.
       this.gizmoStart = null; // Drop any in-progress snapshot state.
+      this.proxyDragActive = false; // Cancel any in-progress proxy drag session.
+      this.proxyDragObjects = []; // Drop drag object references (prevents stale apply).
+      this.proxyDragBefore = []; // Drop snapshots.
+      this.proxyDragObjectStartWorld = []; // Drop world matrices.
 
       // Reset TransformControls internal axis/highlight state by re-attaching if possible.
       if (this.toolMode !== "select" && this.selection) {
-        // Re-attach to the current selection so the gizmo remains usable after recovery.
+        // Re-attach to the current selection/proxy so the gizmo remains usable after recovery.
         this.transformControls.detach(); // Clear internal state.
-        this.transformControls.attach(this.selection); // Restore attachment.
+        this.syncTransformControls(); // Re-attach using current pivot/multi-selection rules.
       } else {
         // If we're in Select mode or no selection, ensure the gizmo is detached and hidden.
         this.transformControls.detach(); // Hide gizmo.
@@ -550,6 +721,146 @@ export class Editor {
   private onGlobalBlur(): void {
     // Treat window blur as an "end of interaction" so camera controls can't get stuck.
     this.onGlobalPointerEnd(); // Reuse the same recovery logic as pointerup/cancel.
+  }
+
+  private isSelectionProxyAttached(): boolean {
+    // Return true if TransformControls is currently attached to our selection proxy.
+    const object = (
+      this.transformControls as unknown as { object?: THREE.Object3D | undefined } // Access `object` via a narrow cast for safety.
+    ).object; // TransformControls stores the attached object on `object`.
+    return object === this.selectionProxy; // Proxy mode is active when the attached object is the proxy.
+  }
+
+  private updateSelectionProxyFromSelection(): void {
+    // Place the selection proxy at the desired pivot point and orientation.
+    //
+    // Why a proxy?
+    // - TransformControls can only attach to one Object3D.
+    // - For multi-selection (or center-pivot transforms), we attach the gizmo to a proxy and apply the same delta to all selected objects.
+    const primary = this.selection; // Primary selection drives orientation in local space.
+    if (!primary) return; // Guard: no selection means nothing to anchor.
+    if (this.selectionList.length === 0) return; // Guard: selection list is the source of truth.
+
+    // Compute pivot position in world space.
+    if (this.pivotMode === "pivot") {
+      // Pivot mode: use the primary selection's pivot (its world position).
+      primary.updateMatrixWorld(true); // Ensure matrixWorld is up to date before reading world position.
+      primary.getWorldPosition(this.tmpVec3); // Read world position into a reused temp vector.
+    } else {
+      // Center mode: use the bounds center of the entire selection set.
+      this.tmpBox.makeEmpty(); // Reset bounds accumulator.
+      for (const obj of this.selectionList) {
+        // Expand the bounds by each selected object's world-space bounds.
+        this.tmpBox2.setFromObject(obj); // Compute bounds for this subtree.
+        this.tmpBox.union(this.tmpBox2); // Union into the accumulated selection bounds.
+      }
+      if (this.tmpBox.isEmpty()) {
+        // Fallback: if bounds are empty (no geometry), use the primary pivot.
+        primary.updateMatrixWorld(true); // Ensure up to date.
+        primary.getWorldPosition(this.tmpVec3); // Use primary pivot position.
+      } else {
+        // Normal case: use bounding box center.
+        this.tmpBox.getCenter(this.tmpVec3); // Compute selection center in world coordinates.
+      }
+    }
+
+    this.selectionProxy.position.copy(this.tmpVec3); // Place proxy at the computed pivot in world space.
+
+    if (this.space === "local") {
+      // Local space: orient the proxy to match the primary selection's world rotation.
+      primary.getWorldQuaternion(this.selectionProxy.quaternion); // Match primary orientation so gizmo axes feel intuitive.
+    } else {
+      // World space: keep proxy rotation identity (axes align to world regardless of selection rotation).
+      this.selectionProxy.quaternion.identity(); // Reset orientation.
+    }
+
+    this.selectionProxy.scale.set(1, 1, 1); // Keep proxy scale normalized (TransformControls will modify it during drags).
+    this.selectionProxy.updateMatrixWorld(true); // Recompute world matrix after setting transform components.
+  }
+
+  private beginProxyDrag(): void {
+    // Capture a multi-object "before" state when dragging begins while attached to the proxy.
+    if (!this.isSelectionProxyAttached()) return; // Guard: only valid in proxy mode.
+    if (!this.selection || this.selectionList.length === 0) return; // Guard: nothing selected.
+
+    this.proxyDragActive = true; // Mark that proxy dragging is active.
+    this.proxyDragObjects = [...this.selectionList]; // Snapshot the affected selection list (order stable during drag).
+    this.proxyDragBefore = this.proxyDragObjects.map((o) => captureTransform(o)); // Capture local "before" snapshots for undo.
+    this.proxyDragObjectStartWorld = this.proxyDragObjects.map((o) => {
+      // Capture each object's world matrix at drag start (used to apply a shared delta transform).
+      o.updateMatrixWorld(true); // Ensure matrices are current before copying.
+      return new THREE.Matrix4().copy(o.matrixWorld); // Store a copy so it stays stable during the drag.
+    });
+
+    this.selectionProxy.updateMatrixWorld(true); // Ensure proxy world matrix is up to date.
+    this.proxyDragStartWorld.copy(this.selectionProxy.matrixWorld); // Capture proxy world matrix at drag start.
+
+    this.gizmoObject = null; // Clear single-object drag state (proxy drag uses different snapshots).
+    this.gizmoStart = null; // Clear single-object drag state.
+  }
+
+  private applyProxyDrag(): void {
+    // Apply the current proxy delta to all selected objects (called on TransformControls "objectChange").
+    if (!this.proxyDragActive) return; // Only apply while we are actively dragging the proxy.
+    if (!this.isSelectionProxyAttached()) return; // Safety: only apply in proxy mode.
+    if (this.proxyDragObjects.length === 0) return; // Guard: nothing to update.
+    if (this.proxyDragObjectStartWorld.length !== this.proxyDragObjects.length) return; // Guard: mismatch indicates stale state.
+
+    this.selectionProxy.updateMatrixWorld(true); // Ensure current proxy matrixWorld is current.
+
+    // Compute delta = currentProxyWorld * inverse(startProxyWorld).
+    this.tmpMat4a.copy(this.selectionProxy.matrixWorld); // currentProxyWorld
+    this.tmpMat4b.copy(this.proxyDragStartWorld).invert(); // inverse(startProxyWorld)
+    this.tmpMat4a.multiply(this.tmpMat4b); // delta matrix in world space
+
+    for (let i = 0; i < this.proxyDragObjects.length; i++) {
+      // Apply the same delta to each object's start world matrix.
+      const obj = this.proxyDragObjects[i]; // Current affected object.
+      const startWorld = this.proxyDragObjectStartWorld[i]; // Stable start world matrix captured on mouseDown.
+
+      this.tmpMat4b.copy(this.tmpMat4a).multiply(startWorld); // newWorld = delta * startWorld
+
+      const parent = obj.parent; // Parent is needed to convert world -> local.
+      if (parent) {
+        // Convert world matrix into parent-local matrix so we can write position/quaternion/scale.
+        parent.updateMatrixWorld(true); // Ensure parent matrixWorld is current.
+        this.tmpMat4c.copy(parent.matrixWorld).invert(); // parentWorldInverse
+        this.tmpMat4c.multiply(this.tmpMat4b); // local = parentWorldInverse * newWorld
+        this.tmpMat4c.decompose(obj.position, obj.quaternion, obj.scale); // Write back local transform components.
+      } else {
+        // If no parent, local == world.
+        this.tmpMat4b.decompose(obj.position, obj.quaternion, obj.scale); // Write transform directly.
+      }
+
+      obj.updateMatrixWorld(true); // Update matrices so helpers/selection boxes stay in sync during the drag.
+    }
+  }
+
+  private commitProxyDrag(e: unknown): void {
+    // Commit a single undoable history entry that affects all selected objects.
+    const objects = this.proxyDragObjects; // Snapshot the affected objects array.
+    const before = this.proxyDragBefore; // Snapshot the captured "before" transforms.
+
+    // Clear internal drag state first so we don't accidentally apply stale deltas after mouseUp.
+    this.proxyDragActive = false; // End proxy drag session.
+    this.proxyDragObjects = []; // Clear object list.
+    this.proxyDragBefore = []; // Clear snapshots.
+    this.proxyDragObjectStartWorld = []; // Clear start world matrices.
+
+    if (objects.length === 0 || before.length !== objects.length) return; // Guard: nothing to commit.
+
+    const after = objects.map((o) => captureTransform(o)); // Capture local "after" snapshots for redo.
+    const changed = after.some((snap, i) => isTransformDifferent(before[i], snap)); // True if any object changed.
+    if (!changed) return; // Skip no-op drags (e.g., click without moving).
+
+    const mode = String((e as unknown as { mode?: unknown }).mode ?? "transform"); // Read TransformControls mode string if present.
+
+    this.history.push({
+      // Push one command that can undo/redo all affected object transforms.
+      label: `Transform (${mode})`, // Label for potential future history UI.
+      undo: () => objects.forEach((o, i) => applyTransform(o, before[i])), // Undo restores all "before" snapshots.
+      redo: () => objects.forEach((o, i) => applyTransform(o, after[i])), // Redo restores all "after" snapshots.
+    });
   }
 
   private ensureSelectionHelper(target: THREE.Object3D): void {
@@ -598,6 +909,7 @@ export class Editor {
 
   private syncTransformControls(): void {
     // Ensure TransformControls attachment/visibility/enabled state matches selection + tool mode.
+    if (this.isDraggingTransform) return; // Avoid re-attaching while actively dragging (prevents jitter/stuck states).
     this.transformControls.setSpace(this.space); // Apply current space setting (local/world).
     this.applyTransformSettings(); // Apply snap settings (translation/rotation/scale snap).
 
@@ -610,18 +922,29 @@ export class Editor {
 
     this.transformControls.enabled = true; // Enable pointer interactions for transform tools.
 
-    if (!this.selection) {
+    if (!this.selection || this.selectionList.length === 0) {
       // If we have no selection, keep gizmo hidden even though a transform tool is active.
       this.transformControls.detach(); // Ensure it is detached and invisible.
       return; // Done.
     }
 
-    this.transformControls.attach(this.selection); // Attach gizmo to the selected object so user can manipulate it.
+    const useProxy = this.pivotMode === "center" || this.selectionList.length > 1; // Proxy is needed for multi-selection or center pivot.
+    if (!useProxy) {
+      // Pivot mode with a single selection can attach directly to the object (simpler and more predictable).
+      this.transformControls.attach(this.selection); // Attach gizmo to the selected object so user can manipulate it.
+      return; // Done.
+    }
+
+    this.updateSelectionProxyFromSelection(); // Position/orient the proxy before attaching.
+    this.transformControls.attach(this.selectionProxy); // Attach gizmo to the proxy (group transforms / center pivot).
   }
 
   private applyTransformSettings(): void {
     // Apply snapping + space settings to TransformControls.
     this.transformControls.setSpace(this.space); // Set local/world space for gizmo axes orientation.
+    this.transformControls.showX = this.axisVisibility.x; // Enable/disable X axis.
+    this.transformControls.showY = this.axisVisibility.y; // Enable/disable Y axis.
+    this.transformControls.showZ = this.axisVisibility.z; // Enable/disable Z axis.
 
     const translationSnap = this.snapEnabled ? this.translationSnap : null; // Use null when snapping is disabled.
     this.transformControls.setTranslationSnap(translationSnap); // Apply translation snap (0/ null disables in TransformControls internals).
@@ -634,6 +957,38 @@ export class Editor {
     const scaleSnap = this.snapEnabled ? this.scaleSnap : null; // Disable scale snap when snapping toggle is off.
     this.transformControls.setScaleSnap(scaleSnap); // Apply scale snap step.
   }
+}
+
+function normalizeSelection(selection: THREE.Object3D[]): THREE.Object3D[] {
+  // Normalize a selection list so editor operations stay predictable.
+  //
+  // Rules:
+  // 1) Remove duplicates while preserving order.
+  // 2) If both a parent and a descendant are selected, keep only the parent.
+  //    (Transforming both would double-apply transforms via inheritance.)
+  const unique: THREE.Object3D[] = []; // Ordered unique list.
+  const seen = new Set<THREE.Object3D>(); // Track objects we've already added.
+  for (const obj of selection) {
+    // Preserve order but skip duplicates.
+    if (!obj) continue; // Defensive: ignore null/undefined values.
+    if (seen.has(obj)) continue; // Skip duplicates.
+    seen.add(obj); // Mark as seen.
+    unique.push(obj); // Keep in output list.
+  }
+
+  if (unique.length <= 1) return unique; // Nothing else to normalize for 0/1 selection.
+
+  const set = new Set(unique); // Membership set used for ancestor checks.
+  return unique.filter((obj) => {
+    // Keep `obj` only if none of its ancestors are also selected.
+    let current = obj.parent; // Start at parent (self is always selected by definition).
+    while (current) {
+      // Walk up the parent chain.
+      if (set.has(current)) return false; // If any ancestor is selected, drop this descendant.
+      current = current.parent; // Move up.
+    }
+    return true; // No selected ancestor found: keep.
+  });
 }
 
 function isDescendantOrSelf(object: THREE.Object3D, root: THREE.Object3D): boolean {
